@@ -3,7 +3,7 @@ import { z } from 'zod';
 export type Env = {
   NODE_ENV: 'development' | 'test' | 'production';
   PORT: number;
-  APP_ORIGIN: string;
+  APP_ORIGINS: string[];
   DATABASE_PATH: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_HOSTED_DOMAIN: string;
@@ -19,7 +19,15 @@ const envSchema = z
       .enum(['development', 'test', 'production'])
       .default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
-    APP_ORIGIN: z.url(),
+    APP_ORIGINS: z
+      .string()
+      .transform((value) =>
+        value
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(z.url()).min(1)),
     DATABASE_PATH: z.string().trim().min(1),
     GOOGLE_CLIENT_ID: z.string().trim().min(1),
     GOOGLE_HOSTED_DOMAIN: z
@@ -46,12 +54,12 @@ const envSchema = z
   .superRefine((env, context) => {
     if (
       env.NODE_ENV === 'production' &&
-      !env.APP_ORIGIN.startsWith('https://')
+      env.APP_ORIGINS.some((origin) => !origin.startsWith('https://'))
     ) {
       context.addIssue({
         code: 'custom',
-        path: ['APP_ORIGIN'],
-        message: '운영 환경의 APP_ORIGIN은 HTTPS 주소여야 합니다.',
+        path: ['APP_ORIGINS'],
+        message: '운영 환경의 APP_ORIGINS는 모두 HTTPS 주소여야 합니다.',
       });
     }
   });

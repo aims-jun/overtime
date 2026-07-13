@@ -98,6 +98,14 @@ describe('authentication API', () => {
     expect(body).toMatchObject({ code: 'FORBIDDEN_COMPANY_ACCOUNT' });
   });
 
+  it('accepts a state-changing request from every configured origin', async () => {
+    await request(app.getHttpServer())
+      .post('/api/auth/google')
+      .set('Origin', 'http://localhost:5175')
+      .send({ credential: 'google-credential' })
+      .expect(200);
+  });
+
   it('rejects a state-changing request from another origin', async () => {
     await request(app.getHttpServer())
       .post('/api/auth/google')

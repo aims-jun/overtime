@@ -3,7 +3,8 @@ import { parseEnv } from './env.schema';
 const validEnv: NodeJS.ProcessEnv = {
   NODE_ENV: 'development',
   PORT: '3000',
-  APP_ORIGIN: 'http://localhost:5173',
+  APP_ORIGINS:
+    'http://localhost:5173, http://localhost:5174,http://localhost:5175',
   DATABASE_PATH: './data/overtime.sqlite',
   GOOGLE_CLIENT_ID: 'client.apps.googleusercontent.com',
   GOOGLE_HOSTED_DOMAIN: 'Company.COM',
@@ -17,6 +18,11 @@ describe('parseEnv', () => {
   it('normalizes domain and administrator emails', () => {
     const env = parseEnv(validEnv);
 
+    expect(env.APP_ORIGINS).toEqual([
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5175',
+    ]);
     expect(env.GOOGLE_HOSTED_DOMAIN).toBe('company.com');
     expect(env.ADMIN_EMAILS).toEqual([
       'admin@company.com',
@@ -35,7 +41,7 @@ describe('parseEnv', () => {
       parseEnv({
         ...validEnv,
         NODE_ENV: 'production',
-        APP_ORIGIN: 'http://overtime.company.com',
+        APP_ORIGINS: 'https://overtime.company.com,http://localhost:5175',
       }),
     ).toThrow();
   });

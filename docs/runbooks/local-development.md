@@ -16,7 +16,7 @@ mkdir -p data
 - `GOOGLE_HOSTED_DOMAIN`: 회사 Google Workspace 도메인
 - `ADMIN_EMAILS`: 관리자 이메일(여러 명이면 쉼표로 구분)
 - `SESSION_HASH_SECRET`: 32자 이상의 무작위 문자열
-- `APP_ORIGIN`: 로컬 Docker는 `http://localhost:8080`
+- `APP_ORIGINS`: 로컬 Docker는 `http://localhost:8080`, Vite 개발 서버는 사용할 주소를 쉼표로 구분
 
 Google OAuth 클라이언트의 **승인된 JavaScript 원본**에도 `http://localhost:5173`(일반 개발)과 `http://localhost:8080`(Docker)을 등록합니다. 리디렉션 URI는 사용하지 않습니다.
 

@@ -10,8 +10,8 @@ export class OriginGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const allowedOrigin = this.config.get('APP_ORIGIN', { infer: true });
-    if (request.header('origin') !== allowedOrigin) {
+    const allowedOrigins = this.config.get('APP_ORIGINS', { infer: true });
+    if (!allowedOrigins.includes(request.header('origin') ?? '')) {
       throw new ApplicationError(
         'INVALID_ORIGIN',
         403,

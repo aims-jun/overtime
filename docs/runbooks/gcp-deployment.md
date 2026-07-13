@@ -170,7 +170,7 @@ docker tag "$REGISTRY/overtime-web:$VERSION" overtime-web
 `EXTERNAL_IP`는 `gcloud compute instances describe`로 확인합니다. `.env`는 커밋하지 않습니다.
 
 ```dotenv
-APP_ORIGIN=http://EXTERNAL_IP
+APP_ORIGINS=http://EXTERNAL_IP
 GOOGLE_CLIENT_ID=YOUR_CLIENT_ID.apps.googleusercontent.com
 VITE_GOOGLE_CLIENT_ID=YOUR_CLIENT_ID.apps.googleusercontent.com
 GOOGLE_HOSTED_DOMAIN=company.com
@@ -205,7 +205,7 @@ API 시작 시 TypeORM 마이그레이션이 자동 실행됩니다.
 `.env.production`:
 
 ```dotenv
-APP_ORIGIN=https://overtime.example.com
+APP_ORIGINS=https://overtime.example.com
 DOMAIN=overtime.example.com
 GOOGLE_CLIENT_ID=YOUR_CLIENT_ID.apps.googleusercontent.com
 GOOGLE_HOSTED_DOMAIN=company.com
