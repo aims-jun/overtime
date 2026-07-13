@@ -9,6 +9,7 @@ import { RequestIdMiddleware } from './common/http/request-id.middleware';
 import { createAppConfigModule } from './config/app.config';
 import { DatabaseModule } from './database/database.module';
 import { OvertimeModule } from './overtime/overtime.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { OvertimeModule } from './overtime/overtime.module';
     DatabaseModule,
     AuthModule,
     OvertimeModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [
