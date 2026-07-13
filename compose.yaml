@@ -1,0 +1,47 @@
+name: overtime-tracker
+
+services:
+  api:
+    image: overtime-api
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_PATH: /app/data/overtime.sqlite
+    user: "${OVERTIME_UID:-1000}:${OVERTIME_GID:-1000}"
+    volumes:
+      - ${OVERTIME_DATA_DIR:-./data}:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: overtime-web
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      args:
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"

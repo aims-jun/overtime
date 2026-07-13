@@ -25,6 +25,19 @@ export class GlobalExceptionFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
+      const exceptionResponse = exception.getResponse();
+      if (
+        status === 503 &&
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null &&
+        'status' in exceptionResponse &&
+        exceptionResponse.status === 'unavailable' &&
+        'database' in exceptionResponse &&
+        exceptionResponse.database === 'unavailable'
+      ) {
+        response.status(status).json(exceptionResponse);
+        return;
+      }
       const code =
         {
           400: 'BAD_REQUEST',
