@@ -1,5 +1,6 @@
 // oxlint-disable react/only-export-components -- route elements and router belong together
-import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom'
+import { Link, Navigate, Outlet, createBrowserRouter } from 'react-router-dom'
+import { AdminPage } from '../admin/AdminPage'
 import { LoginPage } from '../auth/LoginPage'
 import { useAuth } from '../auth/AuthProvider'
 import { OvertimePage } from '../overtime/OvertimePage'
@@ -15,8 +16,9 @@ function ProtectedLayout() {
   return (
     <>
       <header className="app-header">
-        <a className="brand" href="/">늦은 기록</a>
+        <Link className="brand" to="/">늦은 기록</Link>
         <div className="user-menu">
+          {user.isAdmin ? <Link to="/admin">관리자</Link> : null}
           <span>{user.name}</span>
           <button type="button" onClick={() => void signOut()}>로그아웃</button>
         </div>
@@ -26,10 +28,28 @@ function ProtectedLayout() {
   )
 }
 
+function AdminOnly() {
+  const { user } = useAuth()
+  if (!user?.isAdmin) {
+    return (
+      <main className="access-denied">
+        <span className="eyebrow">403</span>
+        <h1>접근 권한이 없습니다</h1>
+        <p>관리자 계정으로 로그인해주세요.</p>
+        <Link to="/">내 기록으로 돌아가기</Link>
+      </main>
+    )
+  }
+  return <AdminPage />
+}
+
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   {
     element: <ProtectedLayout />,
-    children: [{ path: '/', element: <OvertimePage /> }],
+    children: [
+      { path: '/', element: <OvertimePage /> },
+      { path: '/admin', element: <AdminOnly /> },
+    ],
   },
 ])

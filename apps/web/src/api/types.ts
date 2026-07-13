@@ -2,8 +2,7 @@ export type User = {
   id: string
   email: string
   name: string
-  pictureUrl: string | null
-  role: 'EMPLOYEE' | 'ADMIN'
+  isAdmin: boolean
 }
 
 export type OvertimeRecord = {
@@ -28,4 +27,24 @@ export type OvertimeFormValues = {
   startTime: string
   endTime: string
   reason: string
+}
+
+export type AdminUser = { id: string; name: string; email: string }
+
+export type AdminOvertimeRecord = {
+  id: string
+  user: AdminUser
+  workDate: string
+  startTime: string
+  endTime: string
+  durationMinutes: number
+  reason: string
+}
+
+export type AdminReport = {
+  month: string
+  userId?: string
+  totalMinutes: number
+  totalsByUser: Array<{ user: AdminUser; totalMinutes: number }>
+  records: AdminOvertimeRecord[]
 }

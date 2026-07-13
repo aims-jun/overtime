@@ -4,9 +4,11 @@ import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from './test/server'
 import App from './App'
+import { router } from './app/router'
 
 describe('App', () => {
   it('renders the employee page after session authentication', async () => {
+    await router.navigate('/')
     server.use(
       http.get('/api/auth/me', () =>
         HttpResponse.json({
@@ -14,8 +16,7 @@ describe('App', () => {
             id: 'user-1',
             email: 'worker@example.com',
             name: '김야근',
-            pictureUrl: null,
-            role: 'EMPLOYEE',
+            isAdmin: false,
           },
         }),
       ),
@@ -36,5 +37,33 @@ describe('App', () => {
       await screen.findByRole('heading', { name: '야근 기록' }),
     ).toBeInTheDocument()
     expect(screen.getByText('김야근')).toBeInTheDocument()
+  })
+
+  it('does not show the administrator page to an employee', async () => {
+    server.use(
+      http.get('/api/auth/me', () =>
+        HttpResponse.json({
+          user: {
+            id: 'user-1',
+            email: 'worker@example.com',
+            name: '김야근',
+            isAdmin: false,
+          },
+        }),
+      ),
+    )
+    await router.navigate('/admin')
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>,
+    )
+
+    expect(
+      await screen.findByText('접근 권한이 없습니다'),
+    ).toBeInTheDocument()
   })
 })

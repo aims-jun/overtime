@@ -37,6 +37,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, a:focus-visib
 }
 .brand { color: var(--ink); text-decoration: none; font: 700 21px 'Gowun Batang', serif; }
 .user-menu { display: flex; align-items: center; gap: 16px; color: var(--muted); font-size: 14px; }
+.user-menu a { color: var(--sage); font-weight: 700; text-decoration: none; }
 .user-menu button, .record-actions button, .text-button, .status-card button {
   min-height: 42px; border: 0; border-radius: 10px; padding: 0 14px;
   color: var(--sage); background: var(--sage-soft); font-weight: 600;
@@ -106,6 +107,34 @@ h1, h2 { font-family: 'Gowun Batang', serif; color: var(--ink); margin: 0; }
 .login-card .form-error { margin-top: 14px; }
 .loading-page { color: var(--muted); }
 
+.admin-page { max-width: 1120px; margin: 0 auto; padding: 48px 28px 96px; }
+.admin-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+.admin-title h1 { margin-top: 8px; font-size: clamp(36px, 6vw, 56px); letter-spacing: -.04em; }
+.csv-button { display: grid; place-items: center; min-height: 48px; padding: 0 20px; border-radius: 12px; color: white; background: var(--sage); font-weight: 700; text-decoration: none; }
+.admin-filters { display: grid; grid-template-columns: 1fr 1.5fr; gap: 18px; margin-bottom: 28px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 254, 250, .65); }
+.admin-filters select { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #faf9f4; }
+.admin-summary { display: grid; grid-template-columns: 1.2fr .8fr 2fr; gap: 1px; margin-bottom: 28px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--line); }
+.admin-summary > div, .person-totals { margin: 0; padding: 24px; background: var(--paper); }
+.admin-summary span { display: block; margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+.admin-summary strong { font: 700 28px 'Gowun Batang', serif; }
+.admin-summary small { margin-left: 9px; color: var(--muted); }
+.person-totals { list-style: none; }
+.person-totals li { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.person-totals li + li { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e7e6df; }
+.person-totals li span { margin: 0; color: var(--ink); }
+.person-totals li strong { font: 700 15px 'IBM Plex Sans KR', sans-serif; }
+.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); }
+.admin-table { width: 100%; min-width: 820px; border-collapse: collapse; text-align: left; }
+.admin-table th { padding: 14px 16px; color: var(--muted); background: #f7f6f0; font-size: 12px; }
+.admin-table td { padding: 17px 16px; border-top: 1px solid #e8e7e0; font-size: 14px; vertical-align: top; }
+.admin-table td:nth-child(1), .admin-table td:nth-child(3), .admin-table td:nth-child(4) { white-space: nowrap; }
+.admin-table td strong, .admin-table td small { display: block; }
+.admin-table td small { margin-top: 3px; color: var(--muted); }
+.access-denied { min-height: calc(100vh - 68px); display: grid; align-content: center; justify-items: center; padding: 24px; text-align: center; }
+.access-denied h1 { margin-top: 10px; font-size: 36px; }
+.access-denied p { color: var(--muted); }
+.access-denied a { margin-top: 10px; color: var(--sage); font-weight: 700; }
+
 @media (max-width: 767px) {
   .app-header { height: 58px; padding: 0 18px; }
   .user-menu span { display: none; }
@@ -128,6 +157,13 @@ h1, h2 { font-family: 'Gowun Batang', serif; color: var(--ink); margin: 0; }
   .record-actions { grid-column: 2; grid-row: 1 / 4; flex-direction: column; }
   .record-actions button { min-height: 44px; }
   .login-card { padding: 42px 24px; }
+  .admin-page { padding: 32px 18px 72px; }
+  .admin-title { align-items: flex-start; }
+  .admin-title h1 { font-size: 38px; }
+  .csv-button { min-height: 44px; padding: 0 13px; font-size: 13px; }
+  .admin-filters { grid-template-columns: 1fr; padding: 18px; }
+  .admin-summary { grid-template-columns: 1fr 1fr; }
+  .person-totals { grid-column: 1 / -1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
