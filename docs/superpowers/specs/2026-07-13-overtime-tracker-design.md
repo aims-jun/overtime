@@ -187,7 +187,7 @@ API는 한국 날짜와 현지 시작·종료 시각을 입력받는다. 종료 
 |---|---|---|
 | `GET` | `/api/admin/users` | 직원 필터에 사용할 사용자 목록 조회 |
 | `GET` | `/api/admin/overtime?month=YYYY-MM&userId=UUID` | 조건에 맞는 기록과 합계 조회 |
-| `GET` | `/api/admin/reports/monthly.csv?month=YYYY-MM&userId=UUID` | 동일한 조회 결과를 UTF-8 CSV로 다운로드 |
+| `GET` | `/api/admin/reports.csv?month=YYYY-MM&userId=UUID` | 동일한 조회 결과를 UTF-8 CSV로 다운로드 |
 
 `userId`는 선택 사항이며 생략하면 전체 직원을 의미한다. CSV는 한국에서 흔히 사용하는 스프레드시트 프로그램과의 호환성을 위해 UTF-8 BOM을 포함한다. 날짜, 직원 이름, 이메일, 시작 시각, 종료 시각, 총 시간, 사유를 담는다. 스프레드시트 수식 삽입 공격을 막도록 모든 셀을 안전하게 처리한다.
 

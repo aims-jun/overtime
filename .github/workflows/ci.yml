@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y sqlite3
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:e2e -w apps/api -- --runInBand
+      - run: npm run build
+      - run: bash -n docker/backup.sh docker/restore.sh docker/backup-restore.test.sh
+      - run: bash docker/backup-restore.test.sh
+      - run: docker build -f docker/api.Dockerfile -t overtime-api:ci .
+      - run: docker build -f docker/web.Dockerfile -t overtime-web:ci .
+
+  # 배포는 별도의 protected environment에서 Workload Identity Federation으로
+  # 구성합니다. 장기 서비스 계정 키를 GitHub Secret에 저장하지 않습니다.

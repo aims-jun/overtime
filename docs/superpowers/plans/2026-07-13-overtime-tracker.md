@@ -879,7 +879,7 @@ git commit -m "feat: add administrator reports and csv export"
 it('keeps the CSV URL synchronized with active filters', async () => {
   renderAdminPage({ month: '2026-07', selectedUserId: 'user-1' });
   expect(await screen.findByRole('link', { name: 'CSV 다운로드' }))
-    .toHaveAttribute('href', '/api/admin/reports/monthly.csv?month=2026-07&userId=user-1');
+    .toHaveAttribute('href', '/api/admin/reports.csv?month=2026-07&userId=user-1');
 });
 
 it('does not show the admin route to an employee', () => {
@@ -902,7 +902,7 @@ Use URL search parameters as the source of truth for `month` and optional `userI
 export function buildCsvUrl(query: { month: string; userId?: string }): string {
   const params = new URLSearchParams({ month: query.month });
   if (query.userId) params.set('userId', query.userId);
-  return `/api/admin/reports/monthly.csv?${params}`;
+  return `/api/admin/reports.csv?${params}`;
 }
 ```
 

@@ -2,7 +2,7 @@ name: overtime-tracker
 
 services:
   api:
-    image: overtime-api
+    image: ${API_IMAGE:-overtime-api}
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -15,7 +15,7 @@ services:
       DATABASE_PATH: /app/data/overtime.sqlite
     user: "10001:10001"
     volumes:
-      - /var/lib/overtime:/app/data
+      - /data/overtime:/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
@@ -27,7 +27,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   web:
-    image: overtime-web
+    image: ${WEB_IMAGE:-overtime-web}
     build:
       context: .
       dockerfile: docker/web.Dockerfile
@@ -35,9 +35,21 @@ services:
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
     ports:
       - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./docker/Caddyfile.production:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
     logging:
       options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  caddy_data:
+  caddy_config:
