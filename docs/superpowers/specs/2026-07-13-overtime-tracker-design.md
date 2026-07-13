@@ -1,55 +1,55 @@
-# Overtime Tracker Design
+# 야근 기록 서비스 설계
 
-## 1. Purpose
+## 1. 목적
 
-Overtime Tracker is a mobile-first internal web service for recording and reviewing employee overtime. Employees sign in with a company Google Workspace account and manage only their own records. Administrators can review company-wide monthly records and export the filtered result as CSV.
+야근 기록 서비스(Overtime Tracker)는 직원이 모바일에서 야근을 기록하고 관리자가 회사 전체 기록을 확인하는 사내용 반응형 웹 서비스다. 직원은 회사 Google Workspace 계정으로 로그인하고 본인의 기록만 관리한다. 관리자는 월별 기록을 조회하고 현재 조회 결과를 CSV 파일로 내려받을 수 있다.
 
-The first release targets one company and one team. Approval workflows, payroll calculation, multiple teams, and administrator-managed roles are outside the first-release scope.
+첫 번째 버전은 하나의 회사와 하나의 팀을 대상으로 한다. 승인·반려, 급여 계산, 여러 팀 지원, 관리자 화면에서의 권한 변경은 이번 범위에서 제외한다.
 
-## 2. Success Criteria
+## 2. 완료 기준
 
-The first release is successful when:
+다음 조건을 모두 충족하면 첫 번째 버전이 완료된 것으로 본다.
 
-- An employee can sign in with an allowed company Google account on a mobile browser.
-- An employee can create, view, edit, and delete their own overtime records.
-- Overtime that ends after midnight is calculated correctly in the `Asia/Seoul` time zone.
-- An administrator can filter records by month and employee, view totals, and download the same result as CSV.
-- Unauthorized users cannot access another employee's records or administrator APIs.
-- The application can run locally with Docker and is packaged for deployment to one GCP Compute Engine VM.
-- A deployment runbook explains the final domain, HTTPS, Google configuration, backup, and restore steps.
+- 직원이 모바일 브라우저에서 허용된 회사 Google 계정으로 로그인할 수 있다.
+- 직원이 본인의 야근 기록을 생성·조회·수정·삭제할 수 있다.
+- 자정을 넘긴 야근 시간이 `Asia/Seoul` 시간대를 기준으로 정확하게 계산된다.
+- 관리자가 월과 직원을 기준으로 기록을 조회하고 합계를 확인하며, 동일한 결과를 CSV로 내려받을 수 있다.
+- 일반 사용자는 다른 직원의 기록이나 관리자 API에 접근할 수 없다.
+- Docker를 이용해 로컬에서 실행할 수 있고, GCP Compute Engine VM 한 대에 배포할 수 있는 형태로 패키징된다.
+- 도메인, HTTPS, Google 설정, 백업 및 복구 절차가 배포 문서에 설명되어 있다.
 
-Production Google sign-in and public deployment remain pending until a domain or authorized company subdomain is available. Local Google sign-in uses Google's permitted `localhost` development configuration.
+실제 운영 환경의 Google 로그인과 외부 공개 배포는 도메인 또는 사용 권한이 있는 회사 서브도메인이 확보된 뒤 완료한다. 로컬에서는 Google이 개발 환경에 허용하는 `localhost` 설정으로 로그인 기능을 검증한다.
 
-## 3. Scope
+## 3. 범위
 
-### Included
+### 포함하는 기능
 
-- Responsive React web application
+- React 기반 반응형 웹
 - NestJS REST API
-- Google Identity Services sign-in
-- Company Google hosted-domain restriction
-- Opaque server-side sessions in secure cookies
-- Employee overtime CRUD
-- Administrator monthly filtering and totals
-- CSV export of the active administrator filter
-- SQLite persistence on a GCP Persistent Disk
-- Docker-based local and production packaging
-- Health endpoint, structured logs, database backup, and restore documentation
+- Google Identity Services 로그인
+- 회사 Google Workspace 도메인 제한
+- 안전한 쿠키를 이용한 서버 세션
+- 직원 야근 기록 생성·조회·수정·삭제
+- 관리자 월별 조회 및 합계
+- 현재 관리자 조회 조건과 동일한 CSV 내보내기
+- GCP Persistent Disk에 저장되는 SQLite 데이터베이스
+- 로컬 및 운영 환경용 Docker 구성
+- 상태 확인 API, 구조화된 로그, DB 백업 및 복구 문서
 
-### Excluded
+### 제외하는 기능
 
-- Approval or rejection workflow
-- Payroll and monetary calculations
-- Multiple companies or teams
-- Native mobile applications or PWA installation
-- Administrator UI for assigning roles
-- Email, chat, or push notifications
-- Charts and advanced analytics
-- Horizontal scaling or multiple API instances
+- 승인·반려 절차
+- 급여 및 금액 계산
+- 여러 회사 또는 여러 팀 지원
+- 네이티브 모바일 앱과 PWA 설치
+- 관리자 권한을 변경하는 화면
+- 이메일·메신저·푸시 알림
+- 차트 및 고급 분석
+- 여러 API 서버를 동시에 실행하는 수평 확장
 
-## 4. Architecture
+## 4. 전체 구조
 
-The project is a monorepo:
+한 Git 저장소에서 프론트엔드와 백엔드를 함께 관리한다.
 
 ```text
 overtime-tracker/
@@ -58,249 +58,249 @@ overtime-tracker/
 │   └── api/                 # NestJS
 ├── docker/
 ├── docs/
-├── compose.yaml             # Local development
-├── compose.production.yaml  # Single-VM deployment
+├── compose.yaml             # 로컬 개발
+├── compose.production.yaml  # 단일 VM 배포
 └── README.md
 ```
 
-The NestJS application is divided by responsibility:
+NestJS 애플리케이션은 책임에 따라 다음 모듈로 나눈다.
 
-- `AuthModule`: Google credential verification, hosted-domain checks, session lifecycle
-- `UsersModule`: persisted Google user profile and user lookup
-- `OvertimeModule`: employee record commands, queries, validation, and ownership rules
-- `ReportsModule`: administrator filters, monthly totals, and CSV generation
-- `HealthModule`: process and database readiness checks
+- `AuthModule`: Google 인증 정보 검증, 회사 도메인 확인, 세션 관리
+- `UsersModule`: Google 사용자 정보 저장 및 조회
+- `OvertimeModule`: 직원 야근 기록, 입력 검증, 소유권 검사
+- `ReportsModule`: 관리자 필터, 월별 합계, CSV 생성
+- `HealthModule`: 애플리케이션 및 데이터베이스 상태 확인
 
-The API uses controllers for HTTP translation, application services for business rules, and repositories for persistence. Repositories isolate the ORM and SQLite-specific details so that a later PostgreSQL migration does not change controllers or business rules.
+컨트롤러는 HTTP 요청과 응답을 처리하고, 애플리케이션 서비스는 업무 규칙을 담당한다. 저장소 계층은 데이터 저장을 담당한다. 서비스가 ORM이나 SQLite 구현에 직접 의존하지 않도록 저장소 경계를 두어, 나중에 PostgreSQL로 이전할 때 컨트롤러와 업무 규칙의 변경을 최소화한다.
 
-TypeORM is the persistence tool for the first release, using the `better-sqlite3` driver. It integrates with NestJS dependency injection, supports explicit migrations, and can target PostgreSQL later. Application services depend on project-owned repository interfaces rather than TypeORM repositories directly. A PostgreSQL move still requires new database migrations and a data-transfer operation; it is not treated as a configuration-only switch.
+첫 버전의 ORM은 TypeORM이며 `better-sqlite3` 드라이버를 사용한다. TypeORM은 NestJS 의존성 주입과 연결하기 쉽고 명시적인 마이그레이션을 지원하며, 이후 PostgreSQL을 대상으로 사용할 수도 있다. 애플리케이션 서비스는 TypeORM 저장소가 아닌 프로젝트 내부의 저장소 인터페이스에 의존한다. 다만 PostgreSQL 이전에는 새로운 DB 마이그레이션과 데이터 이동 작업이 필요하며, 단순히 설정값만 바꾸는 작업으로 보지 않는다.
 
-In production, two containers run on one Compute Engine VM:
+운영 환경에서는 하나의 Compute Engine VM에서 두 개의 컨테이너를 실행한다.
 
 ```text
-Internet
+인터넷
    |
    v
-Caddy web container
-   ├── /       -> React static assets
-   └── /api/*  -> NestJS API container
+Caddy 웹 컨테이너
+   ├── /       -> React 정적 파일
+   └── /api/*  -> NestJS API 컨테이너
                          |
                          v
                /data/overtime/overtime.sqlite
-                 on a Persistent Disk
+                 (Persistent Disk)
 ```
 
-The web and API share one origin. This avoids cross-origin cookie configuration and keeps the deployment small enough for an `e2-micro` VM. SQLite is embedded in the API process and does not run in a separate container.
+웹과 API는 같은 출처(origin)를 사용한다. 따라서 CORS와 쿠키 설정이 단순해지고 `e2-micro` VM에서도 실행할 수 있는 작은 구성을 유지할 수 있다. SQLite는 API 프로세스에 포함되는 라이브러리이므로 별도의 DB 컨테이너를 실행하지 않는다.
 
-## 5. Authentication and Authorization
+## 5. 로그인과 권한
 
-React renders the official Google Identity Services sign-in control. It submits the returned Google ID credential to `POST /api/auth/google`. The API verifies the credential with Google's supported verification library and checks:
+React는 공식 Google Identity Services 로그인 버튼을 표시한다. Google이 반환한 ID 토큰을 `POST /api/auth/google`로 보내면 API가 Google의 지원 라이브러리를 이용해 다음 항목을 검증한다.
 
-- Google signature
-- `aud` against the configured client ID
-- `iss`
-- expiration
-- verified email state
-- `hd` against `GOOGLE_HOSTED_DOMAIN`
+- Google 서명
+- 설정된 클라이언트 ID와 `aud` 일치 여부
+- `iss` 발급자
+- 만료 시간
+- 이메일 인증 여부
+- `GOOGLE_HOSTED_DOMAIN`과 `hd` 일치 여부
 
-The Google `sub` claim is the stable external user identifier. Email is retained for display and administrator configuration but is not the primary identity key.
+사용자의 외부 고유 식별자는 Google ID 토큰의 `sub` 값을 사용한다. 이메일은 화면 표시와 관리자 설정에 사용하지만, 변경될 수 있으므로 사용자의 기본 식별자로 사용하지 않는다.
 
-After verification, the API upserts the user and issues a cryptographically random opaque session token. Only a hash of that token is stored in the `sessions` table. The raw token is placed in a cookie configured as `HttpOnly`, `Secure` in production, and `SameSite=Lax`. Sessions expire after seven days and logout revokes the current session.
+검증에 성공하면 API는 사용자 정보를 생성하거나 갱신하고 암호학적으로 안전한 무작위 세션 토큰을 발급한다. DB의 `sessions` 테이블에는 토큰 원문이 아닌 해시만 저장한다. 토큰 원문은 `HttpOnly`, 운영 환경의 `Secure`, `SameSite=Lax` 옵션이 적용된 쿠키에 담는다. 세션은 7일 후 만료되며, 로그아웃하면 현재 세션을 폐기한다.
 
-State-changing requests must originate from the configured application origin. The API validates the `Origin` header in addition to the same-site cookie policy. Google credential submission follows Google's CSRF protections.
+데이터를 변경하는 요청은 설정된 애플리케이션 주소에서 시작된 요청만 허용한다. API는 동일 사이트 쿠키 정책과 함께 `Origin` 헤더를 검사한다. Google 로그인 정보 전송에도 Google이 권장하는 CSRF 방어를 적용한다.
 
-Administrator access is configured through a comma-separated `ADMIN_EMAILS` environment variable. This configuration is the source of truth; administrator guards compare the current verified user email with the configured allowlist. No role-editing UI is included.
+관리자 이메일은 쉼표로 구분한 `ADMIN_EMAILS` 환경변수로 관리한다. 이 설정을 권한의 기준으로 사용하며, 관리자 Guard는 현재 로그인한 사용자의 검증된 이메일이 목록에 포함되는지 확인한다. 첫 버전에는 권한을 변경하는 관리자 화면을 만들지 않는다.
 
-Authorization rules are:
+권한 규칙은 다음과 같다.
 
-- Any authenticated employee can read, create, update, and delete only their records.
-- An administrator can read all records, totals, and CSV reports.
-- Administrator status does not grant record mutation for other employees.
-- Unauthenticated requests receive `401`; authenticated but unauthorized requests receive `403`.
+- 로그인한 직원은 본인의 기록만 조회·생성·수정·삭제할 수 있다.
+- 관리자는 모든 기록, 합계, CSV 보고서를 조회할 수 있다.
+- 관리자여도 다른 직원의 기록을 수정하거나 삭제할 수 없다.
+- 로그인하지 않은 요청에는 `401`, 로그인했지만 권한이 없는 요청에는 `403`을 반환한다.
 
-## 6. Data Model
+## 6. 데이터 구조
 
-### User
+### 사용자(User)
 
-| Field | Meaning |
+| 필드 | 의미 |
 |---|---|
-| `id` | Internal UUID |
-| `googleSubject` | Unique Google `sub` claim |
-| `email` | Current verified company email |
-| `name` | Display name |
-| `profileImageUrl` | Optional Google profile image |
-| `createdAt` | First sign-in time |
-| `lastLoginAt` | Most recent successful sign-in |
+| `id` | 내부 UUID |
+| `googleSubject` | Google의 고유한 `sub` 값 |
+| `email` | 현재 검증된 회사 이메일 |
+| `name` | 표시 이름 |
+| `profileImageUrl` | 선택적인 Google 프로필 이미지 |
+| `createdAt` | 최초 로그인 시각 |
+| `lastLoginAt` | 최근 로그인 시각 |
 
-### Session
+### 세션(Session)
 
-| Field | Meaning |
+| 필드 | 의미 |
 |---|---|
-| `id` | Internal UUID |
-| `tokenHash` | Unique hash of the opaque cookie value |
-| `userId` | Owning user |
-| `expiresAt` | Absolute expiry time |
-| `createdAt` | Creation time |
+| `id` | 내부 UUID |
+| `tokenHash` | 쿠키에 담긴 토큰의 고유한 해시 |
+| `userId` | 세션 소유 사용자 |
+| `expiresAt` | 만료 시각 |
+| `createdAt` | 생성 시각 |
 
-Expired sessions may be removed during login and by a scheduled maintenance command. Authorization always loads the current user so administrator configuration changes are reflected without embedding a role in a long-lived client token.
+만료 세션은 로그인 과정과 예약된 정리 명령에서 삭제할 수 있다. 권한 확인 시 현재 사용자 정보를 조회하므로, 장기간 유지되는 클라이언트 토큰 안에 관리자 역할을 고정하지 않는다.
 
-### OvertimeRecord
+### 야근 기록(OvertimeRecord)
 
-| Field | Meaning |
+| 필드 | 의미 |
 |---|---|
-| `id` | Internal UUID |
-| `userId` | Owning employee |
-| `workDate` | Korean calendar date on which overtime starts |
-| `startAt` | Absolute start timestamp |
-| `endAt` | Absolute end timestamp |
-| `durationMinutes` | Server-calculated duration |
-| `reason` | Trimmed employee explanation, 1-500 characters |
-| `createdAt` | Creation time |
-| `updatedAt` | Last update time |
+| `id` | 내부 UUID |
+| `userId` | 기록을 소유한 직원 |
+| `workDate` | 한국 시간 기준 야근 시작 날짜 |
+| `startAt` | 절대 시작 시각 |
+| `endAt` | 절대 종료 시각 |
+| `durationMinutes` | 서버가 계산한 총 분 |
+| `reason` | 공백을 제거한 1~500자의 야근 사유 |
+| `createdAt` | 생성 시각 |
+| `updatedAt` | 최근 수정 시각 |
 
-The API accepts a Korean work date plus local start and end times. If the end time is earlier than the start time, it is interpreted as the following day. Equal start and end times are invalid. Duration must be greater than zero and no more than 16 hours.
+API는 한국 날짜와 현지 시작·종료 시각을 입력받는다. 종료 시각이 시작 시각보다 이르면 다음 날 종료로 해석한다. 시작과 종료 시각이 같으면 잘못된 입력이다. 야근 시간은 0분보다 크고 16시간 이하여야 한다.
 
-Employees may create multiple records for one work date, but records belonging to the same employee cannot overlap. All validation and duration calculation occur on the server and run again on updates. Monthly reports group records by `workDate`, not the UTC date of `startAt`.
+한 직원이 같은 날짜에 여러 기록을 만들 수 있지만 시간대가 겹칠 수는 없다. 수정할 때도 시간 계산과 중복 검사를 다시 수행한다. 모든 입력 검증과 시간 계산은 서버가 최종 책임을 진다. 월별 보고서는 `startAt`의 UTC 날짜가 아니라 `workDate`를 기준으로 묶는다.
 
-## 7. API Contract
+## 7. API
 
-### Authentication
+### 인증
 
-| Method | Route | Purpose |
+| 메서드 | 경로 | 목적 |
 |---|---|---|
-| `POST` | `/api/auth/google` | Verify Google credential and create session |
-| `POST` | `/api/auth/logout` | Revoke current session and clear cookie |
-| `GET` | `/api/auth/me` | Return the current user and derived administrator status |
+| `POST` | `/api/auth/google` | Google 정보 검증 및 세션 생성 |
+| `POST` | `/api/auth/logout` | 현재 세션 폐기 및 쿠키 제거 |
+| `GET` | `/api/auth/me` | 현재 사용자와 관리자 여부 반환 |
 
-### Employee Records
+### 직원 야근 기록
 
-| Method | Route | Purpose |
+| 메서드 | 경로 | 목적 |
 |---|---|---|
-| `GET` | `/api/overtime?month=YYYY-MM` | List the current employee's records and monthly total |
-| `POST` | `/api/overtime` | Create a record |
-| `PATCH` | `/api/overtime/:id` | Update the employee's record |
-| `DELETE` | `/api/overtime/:id` | Delete the employee's record |
+| `GET` | `/api/overtime?month=YYYY-MM` | 본인의 월별 기록과 합계 조회 |
+| `POST` | `/api/overtime` | 기록 생성 |
+| `PATCH` | `/api/overtime/:id` | 본인의 기록 수정 |
+| `DELETE` | `/api/overtime/:id` | 본인의 기록 삭제 |
 
-### Administrator Reporting
+### 관리자 보고서
 
-| Method | Route | Purpose |
+| 메서드 | 경로 | 목적 |
 |---|---|---|
-| `GET` | `/api/admin/users` | List employees for the filter control |
-| `GET` | `/api/admin/overtime?month=YYYY-MM&userId=UUID` | List filtered records and totals |
-| `GET` | `/api/admin/reports/monthly.csv?month=YYYY-MM&userId=UUID` | Download the identical filtered result as UTF-8 CSV |
+| `GET` | `/api/admin/users` | 직원 필터에 사용할 사용자 목록 조회 |
+| `GET` | `/api/admin/overtime?month=YYYY-MM&userId=UUID` | 조건에 맞는 기록과 합계 조회 |
+| `GET` | `/api/admin/reports/monthly.csv?month=YYYY-MM&userId=UUID` | 동일한 조회 결과를 UTF-8 CSV로 다운로드 |
 
-The `userId` filter is optional and an omitted value means all users. CSV uses a UTF-8 BOM for compatibility with common Korean spreadsheet applications and contains work date, employee name, employee email, start, end, duration, and reason. CSV cells are escaped to prevent spreadsheet formula injection.
+`userId`는 선택 사항이며 생략하면 전체 직원을 의미한다. CSV는 한국에서 흔히 사용하는 스프레드시트 프로그램과의 호환성을 위해 UTF-8 BOM을 포함한다. 날짜, 직원 이름, 이메일, 시작 시각, 종료 시각, 총 시간, 사유를 담는다. 스프레드시트 수식 삽입 공격을 막도록 모든 셀을 안전하게 처리한다.
 
-### Operations
+### 운영
 
-| Method | Route | Purpose |
+| 메서드 | 경로 | 목적 |
 |---|---|---|
-| `GET` | `/api/health` | Report process and SQLite readiness without exposing secrets |
+| `GET` | `/api/health` | 비밀 정보를 노출하지 않고 프로세스와 SQLite 상태 확인 |
 
-## 8. User Experience
+## 8. 사용자 경험
 
-The employee flow is optimized for mobile browsers:
+직원 화면은 모바일 브라우저에서 빠르게 기록할 수 있도록 구성한다.
 
-1. Sign in with a company Google account.
-2. See the current month's total and record list.
-3. Open the add form.
-4. Enter work date, start time, end time, and reason.
-5. Review the calculated duration preview and save.
-6. Edit or delete an owned record from the list.
+1. 회사 Google 계정으로 로그인한다.
+2. 이번 달 총 야근 시간과 기록 목록을 확인한다.
+3. 기록 추가 화면을 연다.
+4. 날짜, 시작 시각, 종료 시각, 사유를 입력한다.
+5. 예상 시간을 확인하고 저장한다.
+6. 목록에서 본인의 기록을 수정하거나 삭제한다.
 
-The server remains authoritative for duration even though the web UI shows a preview. The form keeps entered values after recoverable network or validation failures.
+웹 화면은 예상 시간을 미리 보여주지만, 최종 시간 계산은 항상 서버 결과를 따른다. 네트워크 오류나 입력 오류가 발생해도 사용자가 작성한 값을 유지한다.
 
-The administrator view provides a month selector, optional employee selector, total duration, record table, and CSV download. It remains responsive but prioritizes tabular use on larger screens.
+관리자 화면에는 월 선택, 선택적인 직원 필터, 총 야근 시간, 기록 표, CSV 다운로드를 제공한다. 모바일에서도 사용할 수 있지만 표 형태의 정보는 큰 화면에서 더 편하게 볼 수 있도록 구성한다.
 
-Required states include initial loading, empty month, inline validation errors, expired session, forbidden company account, network failure with retry, and unexpected server failure.
+초기 로딩, 기록이 없는 달, 입력 오류, 세션 만료, 허용되지 않은 회사 계정, 재시도 가능한 네트워크 오류, 예상하지 못한 서버 오류 상태를 모두 처리한다.
 
-## 9. Error Handling and Logging
+## 9. 오류 처리와 로그
 
-The API returns a consistent error body containing a stable application code, a safe user message, and an optional field-error map. Expected mappings include:
+API는 안정적인 애플리케이션 오류 코드, 사용자에게 보여줄 수 있는 메시지, 선택적인 필드별 오류를 동일한 형식으로 반환한다.
 
-- `400`: malformed query or input
-- `401`: missing, invalid, or expired session
-- `403`: wrong Google hosted domain or insufficient role
-- `404`: record absent or not owned by the employee
-- `409`: overlapping overtime record
-- `500`: unexpected server failure with internal details omitted
+- `400`: 잘못된 조회 조건 또는 입력
+- `401`: 없거나 잘못되었거나 만료된 세션
+- `403`: 허용되지 않은 Google 회사 도메인 또는 부족한 권한
+- `404`: 존재하지 않거나 본인 소유가 아닌 기록
+- `409`: 기존 야근 기록과 시간이 겹침
+- `500`: 예상하지 못한 서버 오류. 내부 상세 정보는 응답에서 제외
 
-NestJS validation pipes reject unknown input fields. A global exception filter converts expected domain errors into the common response format and logs unexpected failures with a request ID. Logs contain route, status, duration, and request ID but never Google credentials, session cookies, full CSV content, or sensitive environment variables.
+NestJS 전역 Validation Pipe는 정의되지 않은 입력 필드를 거부한다. 전역 예외 필터는 예상 가능한 도메인 오류를 공통 응답 형식으로 변환하고, 예상하지 못한 오류에는 요청 ID를 붙여 기록한다. 로그에는 경로, 응답 상태, 처리 시간, 요청 ID를 포함하지만 Google 인증 정보, 세션 쿠키, 전체 CSV 내용, 민감한 환경변수는 남기지 않는다.
 
-## 10. Testing Strategy
+## 10. 테스트 전략
 
-### Unit Tests
+### 단위 테스트
 
-- Korean local-time conversion and midnight rollover
-- Zero, negative, and over-16-hour rejection
-- Overlap detection, including records crossing midnight
-- Server-side duration calculation
-- Administrator email allowlist evaluation
-- CSV escaping and formula-injection prevention
+- 한국 시간 변환 및 자정 이후 종료 계산
+- 0분, 음수, 16시간 초과 입력 거부
+- 자정을 넘는 기록을 포함한 시간 중복 검사
+- 서버의 야근 시간 계산
+- 관리자 이메일 목록 검사
+- CSV 특수문자 처리와 수식 삽입 방지
 
-### API Integration Tests
+### API 통합 테스트
 
-- Employee CRUD happy paths
-- Ownership protection against read-by-ID mutation attempts
-- General employee rejection from administrator routes
-- Administrator filter and total calculations
-- Google hosted-domain and token-claim validation boundaries using a mocked verifier
-- Session creation, expiry, logout, and revocation
-- Database constraint behavior
+- 직원의 정상적인 생성·조회·수정·삭제
+- 다른 직원 기록의 수정·삭제 방지
+- 일반 사용자의 관리자 API 접근 차단
+- 관리자 필터 및 합계 계산
+- 모의 Google 검증기를 이용한 회사 도메인과 토큰 필드 경계 검사
+- 세션 생성, 만료, 로그아웃, 폐기
+- 데이터베이스 제약 조건
 
-### Web Tests
+### 웹 테스트
 
-- Mobile record creation and validation flow
-- Input preservation after an API failure
-- Empty, loading, and session-expired states
-- Administrator filter synchronization with CSV download
+- 모바일 기록 생성 및 입력 오류 흐름
+- API 오류 후 작성 내용 유지
+- 빈 화면, 로딩, 세션 만료 상태
+- 관리자 필터와 CSV 다운로드 조건의 일치
 
-### Deployment Verification
+### 배포 검증
 
-- Container health checks
-- Persistent database survives API container replacement
-- Database migration runs once before application startup
-- Backup can be restored into a clean environment
+- 컨테이너 상태 확인
+- API 컨테이너를 교체해도 DB가 유지되는지 확인
+- 애플리케이션 시작 전에 DB 마이그레이션이 한 번만 실행되는지 확인
+- 백업 파일을 빈 환경에 복구할 수 있는지 확인
 
-## 11. Deployment, Persistence, and Backup
+## 11. 배포, 데이터 보관, 백업
 
-The target is one non-preemptible GCP Compute Engine `e2-micro` VM in an eligible free-tier US region with standard Persistent Disk. Free-tier limits are not a cost guarantee; billing and budget alerts must be configured before deployment.
+배포 대상은 GCP 무료 티어 대상 미국 리전의 중단 불가능(non-preemptible) `e2-micro` Compute Engine VM 한 대와 표준 Persistent Disk다. 무료 티어 한도는 비용이 전혀 발생하지 않는다는 보장이 아니므로, 배포 전에 결제 계정과 예산 알림을 설정한다.
 
-Production images use multi-stage Docker builds so TypeScript and React build dependencies are absent from runtime images. A CI workflow builds versioned images and pushes them to GCP Artifact Registry; the VM's service account receives pull-only access. The VM pulls prebuilt images rather than compiling the project under its limited memory. Registry storage and build usage are included in cost monitoring because they are not assumed to be free. Containers run as non-root users, use health checks, have restart policies, and cap log-file size.
+운영 이미지는 다단계 Docker 빌드를 사용하여 TypeScript와 React의 빌드 도구를 최종 실행 이미지에서 제거한다. CI가 버전이 표시된 이미지를 빌드해 GCP Artifact Registry에 올리고, VM 서비스 계정에는 이미지 읽기 권한만 부여한다. 작은 VM에서 직접 프로젝트를 빌드하지 않고 완성된 이미지를 내려받는다. Registry 저장 공간과 빌드 사용량도 무료라고 가정하지 않고 비용 감시 대상에 포함한다. 컨테이너는 root가 아닌 사용자로 실행하고, 상태 확인과 재시작 정책 및 로그 파일 크기 제한을 설정한다.
 
-The SQLite database is bind-mounted from `/data/overtime` on a Persistent Disk. It is never stored only in a container layer, committed to Git, or embedded in an image. VM and disk deletion policies must preserve the data disk when the VM is replaced.
+SQLite 파일은 Persistent Disk의 `/data/overtime`을 API 컨테이너에 연결해 보관한다. DB 파일은 컨테이너 내부에만 저장하거나 Git에 커밋하거나 이미지에 포함하지 않는다. VM을 교체하더라도 데이터 디스크를 보존하도록 VM과 디스크의 삭제 정책을 설정한다.
 
-A scheduled job creates a transactionally consistent SQLite backup using SQLite's supported backup mechanism and uploads it to a private Cloud Storage bucket. Retention and lifecycle rules keep a bounded number of backups. The runbook includes a restore drill. Disk persistence alone is not treated as a backup.
+예약 작업은 SQLite가 지원하는 안전한 백업 방식을 이용해 일관된 백업 파일을 만들고, 외부에 공개되지 않은 Cloud Storage 버킷에 올린다. 보관 기간과 수명 주기 규칙을 설정해 백업 수를 제한한다. 복구 방법을 문서화하고 실제 복구 테스트를 수행한다. Persistent Disk에 데이터가 남는 것만으로는 백업이 완료된 것으로 보지 않는다.
 
-Until a domain is available, deployment assets and documentation can be completed but public Google sign-in cannot be considered production-ready. Final activation requires:
+도메인이 없는 동안에도 배포 파일과 문서는 완성할 수 있지만, 외부에서 사용하는 Google 로그인을 운영 준비 완료로 보지는 않는다. 최종 활성화에는 다음 항목이 필요하다.
 
-- A domain or authorized company subdomain
-- DNS pointed to the VM
-- Caddy-issued HTTPS certificate
-- Exact production origin registered with Google
-- OAuth application configured for the company organization where available
+- 도메인 또는 사용 권한이 있는 회사 서브도메인
+- VM을 가리키는 DNS
+- Caddy가 발급한 HTTPS 인증서
+- Google에 등록된 정확한 운영 주소
+- 가능한 경우 회사 조직의 내부용 OAuth 애플리케이션 설정
 
-## 12. Implementation Sequence
+## 12. 구현 순서
 
-1. Create the monorepo and Docker development environment.
-2. Establish NestJS modules, configuration validation, SQLite schema, and migrations.
-3. Implement overtime domain rules and employee APIs with tests.
-4. Implement the mobile employee web flow.
-5. Add Google verification, opaque sessions, origin checks, and authorization guards.
-6. Add administrator filters, totals, and safe CSV export.
-7. Add production Docker images, Caddy routing, health checks, logging, backup, and restore tooling.
-8. Verify local production-style deployment.
-9. Provision the GCP VM and Persistent Disk and configure budget alerts.
-10. When a domain is available, configure DNS, HTTPS, Google production origin, and complete the live deployment verification.
+1. 모노레포와 Docker 개발 환경을 만든다.
+2. NestJS 모듈, 환경변수 검증, SQLite 스키마, 마이그레이션을 구성한다.
+3. 야근 업무 규칙과 직원 API를 테스트와 함께 구현한다.
+4. 모바일 직원 화면을 구현한다.
+5. Google 검증, 불투명 세션, 출처 검사, 권한 Guard를 추가한다.
+6. 관리자 필터, 합계, 안전한 CSV 내보내기를 구현한다.
+7. 운영 Docker 이미지, Caddy 라우팅, 상태 확인, 로그, 백업 및 복구 도구를 추가한다.
+8. 로컬에서 운영 환경과 같은 구성으로 검증한다.
+9. GCP VM과 Persistent Disk를 생성하고 예산 알림을 설정한다.
+10. 도메인이 준비되면 DNS, HTTPS, Google 운영 주소를 설정하고 실제 배포를 검증한다.
 
-## 13. References
+## 13. 참고 자료
 
-- [Google: Verify the Google ID token on your server side](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+- [Google: 서버에서 Google ID 토큰 검증](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
 - [Google: OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect)
-- [Google: OAuth 2.0 Policies](https://developers.google.com/identity/protocols/oauth2/policies)
-- [NestJS: Authentication](https://docs.nestjs.com/security/authentication)
-- [NestJS: Authorization](https://docs.nestjs.com/security/authorization)
-- [Google Cloud Free Tier](https://docs.cloud.google.com/free/docs/free-cloud-features)
+- [Google: OAuth 2.0 정책](https://developers.google.com/identity/protocols/oauth2/policies)
+- [NestJS: 인증](https://docs.nestjs.com/security/authentication)
+- [NestJS: 권한 관리](https://docs.nestjs.com/security/authorization)
+- [Google Cloud 무료 티어](https://docs.cloud.google.com/free/docs/free-cloud-features)
 - [Google Cloud Persistent Disk](https://docs.cloud.google.com/compute/docs/disks/persistent-disks)
-- [Google Cloud Data Protection](https://docs.cloud.google.com/compute/docs/disks/data-protection)
-- [SQLite: Appropriate Uses](https://www.sqlite.org/whentouse.html)
+- [Google Cloud 데이터 보호](https://docs.cloud.google.com/compute/docs/disks/data-protection)
+- [SQLite: 적합한 사용 사례](https://www.sqlite.org/whentouse.html)
