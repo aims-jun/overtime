@@ -1,16 +1,16 @@
-# AIMS+ UI Redesign Implementation Plan
+# AIMS UI Redesign Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the current overtime-journal presentation with the approved mobile-first AIMS+ work-extension interface while preserving all existing behavior.
+**Goal:** Replace the current overtime-journal presentation with the approved mobile-first AIMS work-extension interface while preserving all existing behavior.
 
-**Architecture:** Keep existing React Query data flow, routes, API types, and backend untouched. Restructure the employee page around a collapsed inline editor, update product terminology across login/employee/admin screens, and replace the visual system in `global.css` with the approved lime and deep-green AIMS+ identity.
+**Architecture:** Keep existing React Query data flow, routes, API types, and backend untouched. Restructure the employee page around a collapsed inline editor, update product terminology across login/employee/admin screens, and replace the visual system in `global.css` with the approved lime and deep-green AIMS identity.
 
 **Tech Stack:** React 19, TypeScript, React Router, TanStack Query, Vitest, Testing Library, CSS
 
 ## Global Constraints
 
-- Product name is `AIMS+`; employee page title is `업무 연장 내역`.
+- Product name is `AIMS`; employee page title is `업무 연장 내역`.
 - Primary action is `+ 업무 시간 추가`; list label is `WORK LOG`.
 - Brand colors are lime `#D8FF45` and deep green `#172118`.
 - Backend APIs, database, Google authentication, and CRUD semantics do not change.
@@ -33,10 +33,10 @@
 - Consumes: existing `MonthlyOvertime`, `OvertimeRecord`, `OvertimeForm` callbacks
 - Produces: collapsed `업무 시간 추가` editor that opens for create/edit and closes after save
 
-- [ ] Change tests to expect `AIMS+`, `업무 연장 내역`, `등록된 업무 연장 내역이 없습니다`, `업무 내용`, and `추가 근무 시간 2시간 30분`; add a test that the editor is hidden initially and opens after clicking `+ 업무 시간 추가`.
+- [ ] Change tests to expect `AIMS`, `업무 연장 내역`, `등록된 업무 연장 내역이 없습니다`, `업무 내용`, and `추가 근무 시간 2시간 30분`; add a test that the editor is hidden initially and opens after clicking `+ 업무 시간 추가`.
 - [ ] Run `npm run test --workspace apps/web -- --run` and confirm failures reference the old product copy and always-visible editor.
 - [ ] Add `editorOpen` state to `OvertimePage`; open it from the primary action and edit buttons, close it after save/cancel, and retain React Query invalidation.
-- [ ] Replace employee-facing “야근” language with “업무 연장”, “업무 내용”, and “추가 근무 시간”; change the protected header brand to `AIMS+`.
+- [ ] Replace employee-facing “야근” language with “업무 연장”, “업무 내용”, and “추가 근무 시간”; change the protected header brand to `AIMS`.
 - [ ] Run the focused web tests and confirm the new interaction and copy pass.
 
 ### Task 2: Login and administrator product language
@@ -50,11 +50,11 @@
 
 **Interfaces:**
 - Consumes: existing auth and admin report data
-- Produces: consistent AIMS+ naming without changing routes or API requests
+- Produces: consistent AIMS naming without changing routes or API requests
 
 - [ ] Update admin tests to expect `업무 연장 합계`, `내역 다운로드`, and the new empty-state copy.
 - [ ] Run the admin test and confirm it fails against the existing 야근/CSV labels.
-- [ ] Update the login card to the `AIMS+` wordmark and company-account message; update admin title, summary labels, table headings, accessibility labels, and empty state.
+- [ ] Update the login card to the `AIMS` wordmark and company-account message; update admin title, summary labels, table headings, accessibility labels, and empty state.
 - [ ] Run `npm run test --workspace apps/web -- --run` and confirm all product-language tests pass.
 
 ### Task 3: Approved visual system and responsive layout
@@ -84,4 +84,4 @@
 - [ ] Start or reuse the development server and open the employee page in the in-app browser.
 - [ ] Inspect 320px, 390px, 768px, and desktop widths for clipping, overflow, focus visibility, and editor/list layout; correct any defects in `global.css`.
 - [ ] Run full `npm test`, API E2E, `npm run lint`, and `npm run build`.
-- [ ] Stage only the AIMS+ implementation and plan, then commit with `feat: redesign overtime UI as AIMS plus`.
+- [ ] Stage only the AIMS implementation and plan, then commit with `feat: redesign overtime UI as AIMS`.

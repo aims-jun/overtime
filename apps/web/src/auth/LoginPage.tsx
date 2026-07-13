@@ -30,10 +30,10 @@ export function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-card">
-        <div className="login-wordmark">AIMS+</div>
+        <div className="login-wordmark">AIMS</div>
         <span className="eyebrow">INTERNAL WORK LOG</span>
         <h1>업무 기록을 시작하세요</h1>
-        <p>회사 Google 계정으로<br />AIMS+에 로그인하세요.</p>
+        <p>회사 Google 계정으로<br />AIMS에 로그인하세요.</p>
         <GoogleSignInButton disabled={loading} onCredential={login} />
         {loading ? <p className="login-status">로그인하는 중…</p> : null}
         {error ? <p className="form-error" role="alert">{error}</p> : null}
