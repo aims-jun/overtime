@@ -5,17 +5,17 @@ export function AdminTable({ records }: { records: AdminOvertimeRecord[] }) {
     return (
       <div className="empty-state admin-empty">
         <span aria-hidden="true">–</span>
-        <strong>조건에 맞는 야근 기록이 없습니다</strong>
+        <strong>조건에 맞는 업무 연장 내역이 없습니다</strong>
         <p>조회 월이나 직원을 바꿔보세요.</p>
       </div>
     )
   }
   return (
-    <div className="table-scroll" tabIndex={0} aria-label="야근 기록 표, 가로로 스크롤 가능">
+    <div className="table-scroll" tabIndex={0} aria-label="업무 연장 내역 표, 가로로 스크롤 가능">
       <table className="admin-table">
         <thead>
           <tr>
-            <th>근무일</th><th>직원</th><th>시간</th><th>야근</th><th>사유</th>
+            <th>근무일</th><th>직원</th><th>시간</th><th>추가 근무</th><th>업무 내용</th>
           </tr>
         </thead>
         <tbody>

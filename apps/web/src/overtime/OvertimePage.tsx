@@ -14,9 +14,20 @@ function currentMonth(): string {
   }).format(new Date())
 }
 
+function monthName(value: string): string {
+  const [year, month] = value.split('-').map(Number)
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    timeZone: 'UTC',
+  })
+    .format(new Date(Date.UTC(year, month - 1, 1)))
+    .toUpperCase()
+}
+
 export function OvertimePage() {
   const [month, setMonth] = useState(currentMonth)
   const [editing, setEditing] = useState<OvertimeRecord | null>(null)
+  const [editorOpen, setEditorOpen] = useState(false)
   const [deletingId, setDeletingId] = useState('')
   const [actionError, setActionError] = useState('')
   const queryClient = useQueryClient()
@@ -28,11 +39,12 @@ export function OvertimePage() {
 
   const refresh = async () => {
     setEditing(null)
+    setEditorOpen(false)
     await queryClient.invalidateQueries({ queryKey: ['overtime'] })
   }
 
   const remove = async (record: OvertimeRecord) => {
-    if (!window.confirm(`${record.workDate} 야근 기록을 삭제할까요?`)) return
+    if (!window.confirm(`${record.workDate} 업무 연장 내역을 삭제할까요?`)) return
     setDeletingId(record.id)
     setActionError('')
     try {
@@ -49,30 +61,51 @@ export function OvertimePage() {
   return (
     <main className="page-shell">
       <section className="summary-panel">
-        <div>
-          <span className="eyebrow">나의 기록</span>
-          <h1>야근 기록</h1>
-          <p>늦게까지 애쓴 시간을 잊지 않도록 간단히 남겨요.</p>
+        <div className="summary-copy">
+          <span className="eyebrow">
+            WORK LOG · {monthName(query.data?.month ?? month)}
+          </span>
+          <h1>업무 연장 내역</h1>
+          <p>AIMS의 추가 근무 시간을 간편하게 기록하고 확인하세요.</p>
         </div>
-        <div className="monthly-total" aria-label="선택한 달 야근 합계">
-          <span>{month.slice(5)}월 합계</span>
-          <strong>총 {formatMinutes(query.data?.totalMinutes ?? 0)}</strong>
+        <div className="monthly-total" aria-label="선택한 달 업무 연장 합계">
+          <span>{month.slice(5)}월 업무 연장</span>
+          <strong>{formatMinutes(query.data?.totalMinutes ?? 0)}</strong>
+          <small>TOTAL EXTENDED</small>
         </div>
       </section>
 
-      <section className="surface form-surface">
-        <OvertimeForm
-          record={editing}
-          onSaved={refresh}
-          onCancel={() => setEditing(null)}
-        />
-      </section>
+      <button
+        className="add-record-button"
+        type="button"
+        aria-expanded={editorOpen}
+        aria-controls="work-time-editor"
+        onClick={() => {
+          setEditing(null)
+          setEditorOpen(true)
+        }}
+      >
+        + 업무 시간 추가
+      </button>
+
+      {editorOpen ? (
+        <section className="surface form-surface" id="work-time-editor">
+          <OvertimeForm
+            record={editing}
+            onSaved={refresh}
+            onCancel={() => {
+              setEditing(null)
+              setEditorOpen(false)
+            }}
+          />
+        </section>
+      ) : null}
 
       <section className="history-section">
         <div className="history-heading">
           <div>
-            <span className="eyebrow">기록 내역</span>
-            <h2>이번 달 기록</h2>
+            <span className="eyebrow">WORK LOG</span>
+            <h2>최근 내역</h2>
           </div>
           <label className="month-picker">
             <span className="sr-only">조회 월</span>
@@ -98,6 +131,7 @@ export function OvertimePage() {
             deletingId={deletingId}
             onEdit={(record) => {
               setEditing(record)
+              setEditorOpen(true)
               window.scrollTo({ top: 0, behavior: 'smooth' })
             }}
             onDelete={remove}

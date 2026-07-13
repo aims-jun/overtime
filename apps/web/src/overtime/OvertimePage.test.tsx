@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
@@ -27,9 +28,9 @@ describe('OvertimePage', () => {
     renderPage()
 
     expect(
-      await screen.findByText('이번 달 야근 기록이 없습니다'),
+      await screen.findByText('등록된 업무 연장 내역이 없습니다'),
     ).toBeInTheDocument()
-    expect(screen.getByText('총 0시간')).toBeInTheDocument()
+    expect(screen.getByText('0시간')).toBeInTheDocument()
   })
 
   it('shows records and the server total', async () => {
@@ -57,7 +58,30 @@ describe('OvertimePage', () => {
     renderPage()
 
     expect(await screen.findByText('배포 대응')).toBeInTheDocument()
-    expect(screen.getByText('총 2시간 30분')).toBeInTheDocument()
+    expect(screen.getByText('WORK LOG · JULY')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('선택한 달 업무 연장 합계')).getByText(
+        '2시간 30분',
+      ),
+    ).toBeInTheDocument()
     expect(screen.getByText('22:30 – 다음 날 01:00')).toBeInTheDocument()
+  })
+
+  it('opens the work-time editor only after the primary action', async () => {
+    server.use(
+      http.get('/api/overtime', () =>
+        HttpResponse.json({ month: '2026-07', records: [], totalMinutes: 0 }),
+      ),
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(screen.queryByLabelText('업무 내용')).not.toBeInTheDocument()
+
+    await user.click(
+      await screen.findByRole('button', { name: '+ 업무 시간 추가' }),
+    )
+
+    expect(screen.getByLabelText('업무 내용')).toBeInTheDocument()
   })
 })

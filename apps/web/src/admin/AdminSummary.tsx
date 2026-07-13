@@ -3,9 +3,9 @@ import { formatMinutes } from '../overtime/time-preview'
 
 export function AdminSummary({ report }: { report: AdminReport }) {
   return (
-    <section className="admin-summary" aria-label="야근 집계">
-      <div className="summary-total" aria-label="전체 야근 합계">
-        <span>전체 야근</span>
+    <section className="admin-summary" aria-label="업무 연장 집계">
+      <div className="summary-total" aria-label="전체 업무 연장 합계">
+        <span>전체 업무 연장</span>
         <strong>{formatMinutes(report.totalMinutes)}</strong>
         <small>{report.totalMinutes}분</small>
       </div>

@@ -59,10 +59,13 @@ describe('AdminPage', () => {
     renderPage()
 
     expect(await screen.findByText('배포 대응')).toBeInTheDocument()
-    const total = screen.getByLabelText('전체 야근 합계')
+    expect(
+      screen.getByRole('heading', { name: '업무 연장 현황' }),
+    ).toBeInTheDocument()
+    const total = screen.getByLabelText('전체 업무 연장 합계')
     expect(within(total).getByText('2시간 30분')).toBeInTheDocument()
     expect(within(total).getByText('150분')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'CSV 다운로드' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '내역 다운로드' })).toHaveAttribute(
       'href',
       '/api/admin/reports.csv?month=2026-07&userId=user-1',
     )
@@ -84,7 +87,7 @@ describe('AdminPage', () => {
     renderPage('/admin?month=2026-07')
 
     expect(
-      await screen.findByText('조건에 맞는 야근 기록이 없습니다'),
+      await screen.findByText('조건에 맞는 업무 연장 내역이 없습니다'),
     ).toBeInTheDocument()
   })
 })

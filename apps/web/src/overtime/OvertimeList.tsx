@@ -22,8 +22,8 @@ export function OvertimeList({ records, deletingId, onEdit, onDelete }: Props) {
     return (
       <div className="empty-state">
         <span aria-hidden="true">✓</span>
-        <strong>이번 달 야근 기록이 없습니다</strong>
-        <p>야근한 날이 생기면 위에서 바로 기록할 수 있어요.</p>
+        <strong>등록된 업무 연장 내역이 없습니다</strong>
+        <p>위의 업무 시간 추가 버튼으로 첫 내역을 등록하세요.</p>
       </div>
     )
   }

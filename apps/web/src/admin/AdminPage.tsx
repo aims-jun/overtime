@@ -37,8 +37,8 @@ export function AdminPage() {
   return (
     <main className="admin-page">
       <div className="admin-title">
-        <div><span className="eyebrow">관리자 보고서</span><h1>팀 야근 현황</h1></div>
-        <a className="csv-button" href={buildCsvUrl({ month, userId })}>CSV 다운로드</a>
+        <div><span className="eyebrow">AIMS+ ADMIN</span><h1>업무 연장 현황</h1></div>
+        <a className="csv-button" href={buildCsvUrl({ month, userId })}>내역 다운로드</a>
       </div>
       <AdminFilters
         month={month}

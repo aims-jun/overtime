@@ -16,7 +16,7 @@ function ProtectedLayout() {
   return (
     <>
       <header className="app-header">
-        <Link className="brand" to="/">늦은 기록</Link>
+        <Link className="brand" to="/">AIMS+</Link>
         <div className="user-menu">
           {user.isAdmin ? <Link to="/admin">관리자</Link> : null}
           <span>{user.name}</span>

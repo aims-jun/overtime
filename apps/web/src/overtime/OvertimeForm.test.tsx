@@ -15,10 +15,10 @@ describe('OvertimeForm', () => {
     const user = userEvent.setup()
     render(<OvertimeForm onSaved={vi.fn()} />)
 
-    await user.type(screen.getByLabelText('야근 사유'), '배포 대응')
+    await user.type(screen.getByLabelText('업무 내용'), '배포 대응')
     await user.click(screen.getByRole('button', { name: '저장' }))
 
-    expect(screen.getByLabelText('야근 사유')).toHaveValue('배포 대응')
+    expect(screen.getByLabelText('업무 내용')).toHaveValue('배포 대응')
     expect(screen.getByRole('alert')).toHaveTextContent(
       '잠시 후 다시 시도해주세요',
     )
@@ -33,7 +33,7 @@ describe('OvertimeForm', () => {
     await user.clear(screen.getByLabelText('종료 시간'))
     await user.type(screen.getByLabelText('종료 시간'), '01:00')
 
-    expect(screen.getByText('예상 야근 2시간 30분')).toBeInTheDocument()
+    expect(screen.getByText('추가 근무 시간 2시간 30분')).toBeInTheDocument()
     expect(screen.getByText('종료 시간은 다음 날입니다')).toBeInTheDocument()
   })
 })

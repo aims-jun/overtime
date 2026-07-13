@@ -55,7 +55,7 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!preview.valid) {
-      setError('야근 시간은 16시간 이내로 입력해주세요')
+      setError('추가 근무 시간은 16시간 이내로 입력해주세요')
       return
     }
     setSaving(true)
@@ -81,8 +81,8 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
     <form className="record-form" onSubmit={submit}>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">{record ? '기록 수정' : '새 기록'}</span>
-          <h2>{record ? '야근 내용을 수정해요' : '오늘의 야근을 남겨요'}</h2>
+          <span className="eyebrow">{record ? 'EDIT WORK LOG' : 'NEW WORK LOG'}</span>
+          <h2>{record ? '업무 연장 내역 수정' : '업무 시간 입력'}</h2>
         </div>
         {record && onCancel ? (
           <button className="text-button" type="button" onClick={onCancel}>
@@ -126,14 +126,14 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
       <div className={`time-preview ${preview.valid ? '' : 'is-invalid'}`}>
         <strong>
           {preview.valid
-            ? `예상 야근 ${formatMinutes(preview.durationMinutes)}`
+            ? `추가 근무 시간 ${formatMinutes(preview.durationMinutes)}`
             : '시간을 확인해주세요'}
         </strong>
         {preview.crossesMidnight ? <span>종료 시간은 다음 날입니다</span> : null}
       </div>
 
       <label className="field field-wide">
-        <span>야근 사유</span>
+        <span>업무 내용</span>
         <textarea
           value={values.reason}
           onChange={(event) => update('reason', event.target.value)}
