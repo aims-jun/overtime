@@ -1,8 +1,12 @@
+import { RouterProvider } from 'react-router-dom'
+import { AuthProvider } from './auth/AuthProvider'
+import { router } from './app/router'
+
 function App() {
   return (
-    <main>
-      <h1>야근 기록</h1>
-    </main>
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   )
 }
 
