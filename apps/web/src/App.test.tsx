@@ -36,7 +36,10 @@ describe('App', () => {
     expect(
       await screen.findByRole('heading', { name: '업무 연장 내역' }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'AIMS' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'AIMS' })).toHaveAttribute(
+      'href',
+      '/',
+    )
     expect(screen.getByText('김야근')).toBeInTheDocument()
   })
 
@@ -110,6 +113,7 @@ describe('App', () => {
       await screen.findByRole('heading', { name: '업무 연장 현황' }),
     ).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/admin')
+    expect(router.state.historyAction).toBe('REPLACE')
     expect(screen.getByRole('link', { name: 'AIMS' })).toHaveAttribute(
       'href',
       '/admin',
