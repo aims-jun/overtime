@@ -7,7 +7,7 @@ export function AdminSummary({ report }: { report: AdminReport }) {
       <div className="summary-total" aria-label="전체 업무 연장 합계">
         <span>전체 업무 연장</span>
         <strong>{formatMinutes(report.totalMinutes)}</strong>
-        <small>{report.totalMinutes}분</small>
+        <small>TOTAL EXTENDED</small>
       </div>
       <div className="summary-people">
         <span>기록 인원</span>

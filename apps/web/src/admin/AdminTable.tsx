@@ -1,4 +1,5 @@
 import type { AdminOvertimeRecord } from '../api/types'
+import { formatMinutes } from '../overtime/time-preview'
 
 export function AdminTable({ records }: { records: AdminOvertimeRecord[] }) {
   if (records.length === 0) {
@@ -24,7 +25,7 @@ export function AdminTable({ records }: { records: AdminOvertimeRecord[] }) {
               <td>{record.workDate}</td>
               <td><strong>{record.user.name}</strong><small>{record.user.email}</small></td>
               <td>{record.startTime} – {record.endTime <= record.startTime ? '다음 날 ' : ''}{record.endTime}</td>
-              <td>{record.durationMinutes}분</td>
+              <td>{formatMinutes(record.durationMinutes)}</td>
               <td>{record.reason}</td>
             </tr>
           ))}

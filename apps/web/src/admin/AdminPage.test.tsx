@@ -34,11 +34,11 @@ describe('AdminPage', () => {
         return HttpResponse.json({
           month: '2026-07',
           userId: 'user-1',
-          totalMinutes: 150,
+          totalMinutes: 60,
           totalsByUser: [
             {
               user: { id: 'user-1', name: '김직원', email: 'worker@company.com' },
-              totalMinutes: 150,
+              totalMinutes: 60,
             },
           ],
           records: [
@@ -48,7 +48,7 @@ describe('AdminPage', () => {
               workDate: '2026-07-13',
               startTime: '22:30',
               endTime: '01:00',
-              durationMinutes: 150,
+              durationMinutes: 60,
               reason: '배포 대응',
             },
           ],
@@ -63,8 +63,14 @@ describe('AdminPage', () => {
       screen.getByRole('heading', { name: '업무 연장 현황' }),
     ).toBeInTheDocument()
     const total = screen.getByLabelText('전체 업무 연장 합계')
-    expect(within(total).getByText('2시간 30분')).toBeInTheDocument()
-    expect(within(total).getByText('150분')).toBeInTheDocument()
+    expect(within(total).getByText('1시간')).toBeInTheDocument()
+    expect(within(total).getByText('TOTAL EXTENDED')).toBeInTheDocument()
+    expect(within(total).queryByText('60분')).not.toBeInTheDocument()
+
+    const recordRow = screen.getByText('배포 대응').closest('tr')
+    expect(recordRow).not.toBeNull()
+    expect(within(recordRow!).getByText('1시간')).toBeInTheDocument()
+    expect(within(recordRow!).queryByText('60분')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '내역 다운로드' })).toHaveAttribute(
       'href',
       '/api/admin/reports.csv?month=2026-07&userId=user-1',
