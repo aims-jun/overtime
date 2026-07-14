@@ -9,6 +9,12 @@ function LoadingPage() {
   return <main className="loading-page">서비스를 준비하는 중…</main>
 }
 
+function RoleHome() {
+  const { user } = useAuth()
+  if (user?.isAdmin) return <Navigate to="/admin" replace />
+  return <OvertimePage />
+}
+
 function ProtectedLayout() {
   const { user, loading, signOut } = useAuth()
   if (loading) return <LoadingPage />
@@ -16,7 +22,7 @@ function ProtectedLayout() {
   return (
     <>
       <header className="app-header">
-        <Link className="brand" to="/">AIMS</Link>
+        <Link className="brand" to={user.isAdmin ? '/admin' : '/'}>AIMS</Link>
         <div className="user-menu">
           {user.isAdmin ? <Link to="/admin">관리자</Link> : null}
           <span>{user.name}</span>
@@ -48,7 +54,7 @@ export const router = createBrowserRouter([
   {
     element: <ProtectedLayout />,
     children: [
-      { path: '/', element: <OvertimePage /> },
+      { path: '/', element: <RoleHome /> },
       { path: '/admin', element: <AdminOnly /> },
     ],
   },
