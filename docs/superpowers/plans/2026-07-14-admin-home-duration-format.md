@@ -29,7 +29,7 @@
 - Consumes: `useAuth().user.isAdmin: boolean`
 - Produces: `RoleHome` route element and role-specific brand-link destinations
 
-- [ ] **Step 1: Write a failing administrator-home test**
+- [x] **Step 1: Write a failing administrator-home test**
 
 Update the Vitest import to include `vi`, then add this test to `App.test.tsx`:
 
@@ -87,13 +87,13 @@ it('redirects an administrator home without loading personal overtime', async ()
 })
 ```
 
-- [ ] **Step 2: Run the focused app test and verify RED**
+- [x] **Step 2: Run the focused app test and verify RED**
 
 Run: `npm run test --workspace apps/web -- --run src/App.test.tsx`
 
 Expected: FAIL because the administrator remains on `/`, sees `업무 연장 내역`, and requests `/api/overtime`.
 
-- [ ] **Step 3: Add the role-aware home element**
+- [x] **Step 3: Add the role-aware home element**
 
 Add this component to `router.tsx`:
 
@@ -111,7 +111,7 @@ Change the protected root route to:
 { path: '/', element: <RoleHome /> },
 ```
 
-- [ ] **Step 4: Make the brand link role-aware**
+- [x] **Step 4: Make the brand link role-aware**
 
 In `ProtectedLayout`, replace the brand link with:
 
@@ -119,13 +119,13 @@ In `ProtectedLayout`, replace the brand link with:
 <Link className="brand" to={user.isAdmin ? '/admin' : '/'}>AIMS</Link>
 ```
 
-- [ ] **Step 5: Run the focused app test and verify GREEN**
+- [x] **Step 5: Run the focused app test and verify GREEN**
 
 Run: `npm run test --workspace apps/web -- --run src/App.test.tsx`
 
 Expected: all 3 App tests pass; the administrator lands on `/admin` without a personal overtime request, and existing employee cases still pass.
 
-- [ ] **Step 6: Commit the routing behavior**
+- [x] **Step 6: Commit the routing behavior**
 
 ```bash
 git add apps/web/src/app/router.tsx apps/web/src/App.test.tsx
@@ -143,7 +143,7 @@ git commit -m "feat: route administrators to admin home"
 - Consumes: `formatMinutes(value: number): string` from `apps/web/src/overtime/time-preview.ts`
 - Produces: human-readable admin table and summary duration copy
 
-- [ ] **Step 1: Write failing admin duration expectations**
+- [x] **Step 1: Write failing admin duration expectations**
 
 Change the synchronized report fixture's `totalMinutes`, per-user `totalMinutes`, and record `durationMinutes` from `150` to `60`. Replace the current total assertions with:
 
@@ -159,13 +159,13 @@ expect(within(recordRow!).getByText('1시간')).toBeInTheDocument()
 expect(within(recordRow!).queryByText('60분')).not.toBeInTheDocument()
 ```
 
-- [ ] **Step 2: Run the focused admin test and verify RED**
+- [x] **Step 2: Run the focused admin test and verify RED**
 
 Run: `npm run test --workspace apps/web -- --run src/admin/AdminPage.test.tsx`
 
 Expected: FAIL because the table renders `60분` and the summary small text also renders `60분` instead of `TOTAL EXTENDED`.
 
-- [ ] **Step 3: Reuse the shared formatter in the table**
+- [x] **Step 3: Reuse the shared formatter in the table**
 
 Import the utility in `AdminTable.tsx`:
 
@@ -179,7 +179,7 @@ Replace the duration cell with:
 <td>{formatMinutes(record.durationMinutes)}</td>
 ```
 
-- [ ] **Step 4: Remove the duplicate raw-minute summary copy**
+- [x] **Step 4: Remove the duplicate raw-minute summary copy**
 
 Replace the summary's raw-minute small text with:
 
@@ -187,13 +187,13 @@ Replace the summary's raw-minute small text with:
 <small>TOTAL EXTENDED</small>
 ```
 
-- [ ] **Step 5: Run the focused admin test and verify GREEN**
+- [x] **Step 5: Run the focused admin test and verify GREEN**
 
 Run: `npm run test --workspace apps/web -- --run src/admin/AdminPage.test.tsx`
 
 Expected: both AdminPage tests pass; the 60-minute record and total display as `1시간`.
 
-- [ ] **Step 6: Commit the administrator duration formatting**
+- [x] **Step 6: Commit the administrator duration formatting**
 
 ```bash
 git add apps/web/src/admin/AdminTable.tsx apps/web/src/admin/AdminSummary.tsx apps/web/src/admin/AdminPage.test.tsx
@@ -209,19 +209,19 @@ git commit -m "fix: format admin overtime durations"
 - Consumes: completed role-aware routing and admin duration formatting
 - Produces: verified repository state and a completed plan checklist
 
-- [ ] **Step 1: Run all tests**
+- [x] **Step 1: Run all tests**
 
 Run: `npm test`
 
 Expected: all API Jest and web Vitest tests pass with zero failures.
 
-- [ ] **Step 2: Run the complete API E2E suite**
+- [x] **Step 2: Run the complete API E2E suite**
 
 Run: `npm run test:e2e --workspace apps/api -- --runInBand`
 
 Expected: all API E2E suites pass with zero failures.
 
-- [ ] **Step 3: Run lint and production builds**
+- [x] **Step 3: Run lint and production builds**
 
 Run: `npm run lint`
 
@@ -231,7 +231,7 @@ Run: `npm run build`
 
 Expected: Nest and Vite production builds exit with code 0.
 
-- [ ] **Step 4: Verify scope**
+- [x] **Step 4: Verify scope**
 
 Run: `git diff --check`
 
@@ -241,7 +241,7 @@ Run: `git status --short`
 
 Expected: only the implementation plan remains modified after both implementation commits.
 
-- [ ] **Step 5: Complete and commit the plan**
+- [x] **Step 5: Complete and commit the plan**
 
 Mark every completed checkbox `[x]`, then run:
 
