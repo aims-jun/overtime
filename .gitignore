@@ -11,3 +11,9 @@ coverage/
 *.sqlite-wal
 data/
 backups/
+
+# Oracle production credentials and runtime state
+.env.production
+.env.backup
+*.pem
+*.key
