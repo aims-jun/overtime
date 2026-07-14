@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily AIMS overtime backup
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Asia/Seoul
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target
