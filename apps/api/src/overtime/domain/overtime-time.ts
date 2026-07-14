@@ -65,5 +65,5 @@ import { InvalidOvertimeTimeError } from './overtime.errors';
 
 const SEOUL_TIME_ZONE = 'Asia/Seoul';
 const DATE_PATTERN = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
-const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIME_PATTERN = /^([01]\d|2[0-3]):(00|30)$/;
 const MAX_DURATION_MINUTES = 16 * 60;

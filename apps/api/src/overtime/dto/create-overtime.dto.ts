@@ -6,11 +6,11 @@ export class CreateOvertimeDto {
   workDate!: string;
 
   @IsString()
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+  @Matches(/^([01]\d|2[0-3]):(00|30)$/)
   startTime!: string;
 
   @IsString()
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/)
+  @Matches(/^([01]\d|2[0-3]):(00|30)$/)
   endTime!: string;
 
   @IsString()

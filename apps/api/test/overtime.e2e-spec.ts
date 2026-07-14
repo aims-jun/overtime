@@ -167,4 +167,20 @@ describe('employee overtime API', () => {
       })
       .expect(400);
   });
+
+  it('rejects times outside thirty-minute increments', async () => {
+    const cookie = await login();
+
+    await request(app.getHttpServer())
+      .post('/api/overtime')
+      .set('Origin', 'http://localhost:5173')
+      .set('Cookie', cookie)
+      .send({
+        workDate: '2026-07-13',
+        startTime: '18:10',
+        endTime: '20:00',
+        reason: '잘못된 시간 입력',
+      })
+      .expect(400);
+  });
 });

@@ -44,6 +44,8 @@ describe('buildOvertimeInterval', () => {
   it.each([
     { workDate: '2026-07-13', startTime: '18:00', endTime: '18:00' },
     { workDate: '2026-07-13', startTime: '18:00', endTime: '10:01' },
+    { workDate: '2026-07-13', startTime: '18:10', endTime: '20:00' },
+    { workDate: '2026-07-13', startTime: '18:00', endTime: '20:45' },
     { workDate: '2026-02-30', startTime: '18:00', endTime: '20:00' },
     { workDate: '2026-07-13', startTime: '24:00', endTime: '01:00' },
     { workDate: '2026-7-13', startTime: '18:00', endTime: '20:00' },
