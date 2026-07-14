@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, friendlyError } from '../api/http'
 import type { OvertimeFormValues, OvertimeRecord } from '../api/types'
+import { THIRTY_MINUTE_TIME_OPTIONS } from './time-options'
 import { formatMinutes, previewTime } from './time-preview'
 
 type Props = {
@@ -104,22 +105,28 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
       <div className="time-fields">
         <label className="field">
           <span>시작 시간</span>
-          <input
-            type="time"
+          <select
             value={values.startTime}
             onChange={(event) => update('startTime', event.target.value)}
             required
-          />
+          >
+            {THIRTY_MINUTE_TIME_OPTIONS.map((time) => (
+              <option key={time} value={time}>{time}</option>
+            ))}
+          </select>
         </label>
         <span className="time-arrow" aria-hidden="true">→</span>
         <label className="field">
           <span>종료 시간</span>
-          <input
-            type="time"
+          <select
             value={values.endTime}
             onChange={(event) => update('endTime', event.target.value)}
             required
-          />
+          >
+            {THIRTY_MINUTE_TIME_OPTIONS.map((time) => (
+              <option key={time} value={time}>{time}</option>
+            ))}
+          </select>
         </label>
       </div>
 
