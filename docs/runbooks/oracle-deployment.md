@@ -312,7 +312,24 @@ Bucket의 Lifecycle Policy에 이름 prefix `overtime-`인 객체를 **30일 후
 (
   set -euo pipefail
   RESTORE_TMP_DIR=$(mktemp -d)
-  trap 'rm -rf "$RESTORE_TMP_DIR"' EXIT
+  API_STOPPED=0
+  restore_api_on_exit() {
+    exit_status=$?
+    set +e
+    if [[ "$API_STOPPED" == 1 ]]; then
+      sudo chown 10001:10001 /data/overtime/overtime.sqlite
+      if ! docker compose --env-file .env.production -f compose.production.yaml up -d api \
+        || ! curl --fail --retry 10 --retry-delay 2 --retry-all-errors https://aims-overtime.duckdns.org/api/health; then
+        echo '긴급 확인 필요: 실제 복구 실패 후 API 자동 재기동 또는 health check도 실패했습니다.' >&2
+        exit_status=1
+      else
+        echo '실제 복구 실패 후 API를 자동 재기동했습니다.' >&2
+      fi
+    fi
+    rm -rf "$RESTORE_TMP_DIR"
+    exit "$exit_status"
+  }
+  trap restore_api_on_exit EXIT
   read -r -p '실제 복구할 Object Storage 객체 이름: ' OCI_BACKUP_OBJECT
   if [[ ! "$OCI_BACKUP_OBJECT" =~ ^overtime-[0-9]{8}T[0-9]{6}Z\.sqlite$ ]]; then
     echo '중지: overtime-YYYYMMDDTHHMMSSZ.sqlite 형식의 객체 이름이 아닙니다.' >&2
@@ -322,11 +339,14 @@ Bucket의 Lifecycle Policy에 이름 prefix `overtime-`인 객체를 **30일 후
   RESTORE_SOURCE="$RESTORE_TMP_DIR/$OCI_BACKUP_OBJECT"
   oci os object get --auth instance_principal --bucket-name aims-overtime-backups --name "$OCI_BACKUP_OBJECT" --file "$RESTORE_SOURCE"
   test -s "$RESTORE_SOURCE"
+  test "$(sqlite3 "$RESTORE_SOURCE" 'PRAGMA integrity_check;')" = 'ok'
   docker compose --env-file .env.production -f compose.production.yaml stop api
+  API_STOPPED=1
   sudo env RESTORE_SOURCE="$RESTORE_SOURCE" RESTORE_TARGET=/data/overtime/overtime.sqlite CONFIRM_RESTORE=YES ./docker/restore.sh
   sudo chown 10001:10001 /data/overtime/overtime.sqlite
   docker compose --env-file .env.production -f compose.production.yaml up -d api
-  curl --fail https://aims-overtime.duckdns.org/api/health
+  curl --fail --retry 10 --retry-delay 2 --retry-all-errors https://aims-overtime.duckdns.org/api/health
+  API_STOPPED=0
   printf '실제 복구 성공: %s %s\n' "$(date -u +%FT%TZ)" "$OCI_BACKUP_OBJECT"
 )
 ```
