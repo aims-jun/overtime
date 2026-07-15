@@ -28,4 +28,24 @@ if RESTORE_SOURCE="$backup" RESTORE_TARGET="$tmp/restored.sqlite" \
   exit 1
 fi
 
+mkdir -p "$tmp/bin"
+cat > "$tmp/bin/oci" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "$OCI_CALL_LOG"
+EOF
+chmod +x "$tmp/bin/oci"
+
+OCI_CALL_LOG="$tmp/oci-call.log" \
+PATH="$tmp/bin:$PATH" \
+DATABASE_PATH="$tmp/source.sqlite" \
+BACKUP_DIR="$tmp/oci-backups" \
+BACKUP_RETENTION_DAYS=30 \
+OCI_BACKUP_BUCKET=aims-overtime-backups \
+  "$root/docker/backup-oci.sh"
+
+grep -F -- 'os object put --auth instance_principal' "$tmp/oci-call.log"
+grep -F -- '--bucket-name aims-overtime-backups' "$tmp/oci-call.log"
+grep -F -- '--file ' "$tmp/oci-call.log"
+grep -F -- '--force' "$tmp/oci-call.log"
+
 echo 'backup and restore smoke test passed'

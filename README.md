@@ -10,14 +10,14 @@
 - 관리자 전체/직원별 월 집계와 CSV 내보내기
 - 모바일 우선 React UI
 - SQLite 영속 볼륨, Caddy 프록시, DB 준비 상태 헬스체크
-- 일관된 SQLite 백업·복구와 GCP e2-micro 배포 절차
+- 일관된 SQLite 백업·복구와 공급자별 배포 절차
 
 ## 기술 구성
 
 - 웹: React 19, TypeScript, Vite, React Query, React Router
 - API: NestJS 11, TypeORM, Zod, Google Auth Library
 - DB: SQLite (`better-sqlite3`)
-- 운영: Docker Compose, Caddy, GCP Compute Engine / Persistent Disk
+- 운영: Docker Compose, Caddy, Oracle Cloud Always Free 또는 GCP Compute Engine
 
 ```text
 모바일 브라우저 → Caddy(:80/:443) ┬→ React 정적 파일
@@ -56,5 +56,8 @@ npm run build
 - [로컬 개발과 Docker](docs/runbooks/local-development.md)
 - [백업과 복구](docs/runbooks/backup-restore.md)
 - [GCP 배포](docs/runbooks/gcp-deployment.md)
+- [Oracle Always Free 배포](docs/runbooks/oracle-deployment.md)
+
+Oracle Always Free 인스턴스는 SLA가 보장되지 않고 유휴 상태로 판단되면 회수될 수 있으므로, 회사 필수 시스템이 되면 SLA가 있는 유료 인프라를 검토하세요.
 
 운영 비밀값인 `.env`, SQLite 파일, 백업 파일은 Git에 포함되지 않습니다.
