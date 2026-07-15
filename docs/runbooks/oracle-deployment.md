@@ -100,13 +100,22 @@ UUID=실제-blkid-UUID /data/overtime ext4 defaults,nofail 0 2
 ```bash
 sudo mount -a
 findmnt /data/overtime
-sudo useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin overtime
+UID_ENTRY=$(getent passwd 10001 || true)
+NAME_ENTRY=$(getent passwd overtime || true)
+if [ -n "$UID_ENTRY" ] && [ -n "$NAME_ENTRY" ] && [ "$UID_ENTRY" = "$NAME_ENTRY" ]; then
+  echo 'overtime 사용자가 이미 UID 10001로 존재합니다.'
+elif [ -n "$UID_ENTRY" ] || [ -n "$NAME_ENTRY" ]; then
+  echo '중지: UID 10001 또는 overtime 이름이 다른 계정과 충돌합니다.' >&2
+  exit 1
+else
+  sudo useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin overtime
+fi
 sudo chown -R 10001:10001 /data/overtime
 id overtime
 ls -ldn /data/overtime
 ```
 
-`overtime` 사용자가 이미 있으면 `useradd`를 반복하지 말고 `id overtime`으로 UID가 10001인지 확인한다. `findmnt`의 source가 등록한 UUID의 50GB 볼륨인지 확인한 후에 배포를 계속한다.
+`getent passwd 10001`과 `getent passwd overtime`을 모두 확인한다. 두 조회가 동일한 기존 계정을 반환할 때만 재사용하고, UID 10001이 다른 이름에 할당됐거나 `overtime`이 다른 UID에 할당됐으면 명시적으로 중지한다. 두 조회가 모두 비어 있을 때만 사용자를 만든다. `findmnt`의 source가 등록한 UUID의 50GB 볼륨인지 확인한 후에 배포를 계속한다.
 
 ## 4. Docker와 필수 도구 설치
 
@@ -177,7 +186,7 @@ OVERTIME_DATA_DIR=/data/overtime
 `SESSION_HASH_SECRET`가 여전히 비어 있으면 Compose를 실행하지 않는다. 설정을 렌더링한 뒤 VM에서 ARM64 이미지를 직접 빌드하고 시작한다.
 
 ```bash
-docker compose --env-file .env.production -f compose.production.yaml config
+docker compose --env-file .env.production -f compose.production.yaml config --quiet
 docker compose --env-file .env.production -f compose.production.yaml up -d --build
 docker compose --env-file .env.production -f compose.production.yaml ps
 ```
@@ -214,13 +223,13 @@ Allow dynamic-group aims-overtime-backup-instances to manage objects in compartm
 
 이 정책에는 bucket 관리나 다른 리소스 권한을 추가하지 않는다. 정책 전파에는 몇 분이 걸릴 수 있다.
 
-OCI CLI는 systemd 서비스의 `overtime` 사용자도 실행할 수 있도록 `/usr/local/bin/oci`에 설치한다. Oracle의 공식 OCI CLI 설치 스크립트 내용을 확인한 뒤 다음과 같이 시스템 경로에 설치한다.
+OCI CLI는 systemd 서비스의 `overtime` 사용자도 실행할 수 있도록 `/usr/local/bin/oci`에 설치한다. mutable `master` 대신 검토한 OCI CLI commit `7242aae6b3959f8006e7a69ac4c6b4b104dda0df`의 설치 스크립트를 내려받고 SHA-256을 확인한 뒤, CLI `3.89.2`를 시스템 경로에 설치한다.
 
 ```bash
-curl -L https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh -o /tmp/install-oci-cli.sh
-less /tmp/install-oci-cli.sh
-sudo bash /tmp/install-oci-cli.sh --accept-all-defaults --install-dir /opt/oci-cli --exec-dir /usr/local/bin
-oci --version
+curl -fsSL https://raw.githubusercontent.com/oracle/oci-cli/7242aae6b3959f8006e7a69ac4c6b4b104dda0df/scripts/install/install.sh -o /tmp/oci-cli-install.sh
+echo '079dcc9a3e2a61ec692400e30169c9996b2998ac8c4e205198ed5863283fcb76  /tmp/oci-cli-install.sh' | sha256sum -c -
+sudo bash /tmp/oci-cli-install.sh --accept-all-defaults --install-dir /opt/oci-cli --exec-dir /usr/local/bin --oci-cli-version 3.89.2
+test "$(oci --version)" = '3.89.2'
 oci os ns get --auth instance_principal
 ```
 
@@ -250,9 +259,18 @@ sudo install -m 0644 deploy/oracle/overtime-backup.timer /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now overtime-backup.timer
 sudo systemctl start overtime-backup.service
-sudo systemctl status overtime-backup.service --no-pager
+sudo systemctl status overtime-backup.service --no-pager || true
+BACKUP_STATE=$(sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus)
+printf '%s\n' "$BACKUP_STATE"
+sudo journalctl -u overtime-backup.service --since today --no-pager
+if ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'Result=success' || ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'ExecMainStatus=0'; then
+  echo '중지: 백업 oneshot이 성공하지 않았습니다.' >&2
+  exit 1
+fi
 sudo systemctl list-timers overtime-backup.timer
 ```
+
+`overtime-backup.service`는 oneshot unit이므로 실행 후 `inactive (dead)`여도 성공일 수 있다. 위 `systemctl show`의 `Result=success`, `ExecMainStatus=0`과 journal을 모두 확인한 뒤에만 백업 성공으로 기록한다.
 
 Oracle VM에서 unit 문법도 검증한다.
 
@@ -265,23 +283,52 @@ Bucket의 Lifecycle Policy에 이름 prefix `overtime-`인 객체를 **30일 후
 
 ## 8. 백업 복구 훈련과 실제 복구
 
-매달 한 번 Object Storage 백업을 운영 DB와 다른 임시 경로에 내려받아 복구 훈련을 한다. 객체 이름은 실제 최근 백업으로 바꾼다.
+매달 한 번 Object Storage 백업을 운영 DB와 다른 임시 경로에 내려받아 복구 훈련을 한다. 고정 `/tmp` 파일을 재사용하지 않고 매번 새 staging directory를 만들며, 실제 최근 백업 객체 이름을 입력하고 검증한다. 다음 fail-fast subshell은 다운로드가 실패하면 복구를 실행하지 않고 임시 디렉터리를 정리한다.
 
 ```bash
-oci os object get --auth instance_principal --bucket-name aims-overtime-backups --name overtime-TIMESTAMP.sqlite --file /tmp/restore-source.sqlite
-rm -f /tmp/restore-drill.sqlite
-RESTORE_SOURCE=/tmp/restore-source.sqlite RESTORE_TARGET=/tmp/restore-drill.sqlite ./docker/restore.sh
-sqlite3 /tmp/restore-drill.sqlite 'PRAGMA integrity_check;'
+(
+  set -euo pipefail
+  RESTORE_TMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$RESTORE_TMP_DIR"' EXIT
+  read -r -p '복구할 Object Storage 객체 이름: ' OCI_BACKUP_OBJECT
+  if [[ ! "$OCI_BACKUP_OBJECT" =~ ^overtime-[0-9]{8}T[0-9]{6}Z\.sqlite$ ]]; then
+    echo '중지: overtime-YYYYMMDDTHHMMSSZ.sqlite 형식의 객체 이름이 아닙니다.' >&2
+    exit 1
+  fi
+  printf '선택한 복구 객체: %s\n' "$OCI_BACKUP_OBJECT"
+  RESTORE_SOURCE="$RESTORE_TMP_DIR/$OCI_BACKUP_OBJECT"
+  RESTORE_TARGET="$RESTORE_TMP_DIR/restore-drill.sqlite"
+  oci os object get --auth instance_principal --bucket-name aims-overtime-backups --name "$OCI_BACKUP_OBJECT" --file "$RESTORE_SOURCE"
+  test -s "$RESTORE_SOURCE"
+  RESTORE_SOURCE="$RESTORE_SOURCE" RESTORE_TARGET="$RESTORE_TARGET" ./docker/restore.sh
+  test "$(sqlite3 "$RESTORE_TARGET" 'PRAGMA integrity_check;')" = 'ok'
+  printf '복구 훈련 성공: %s %s\n' "$(date -u +%FT%TZ)" "$OCI_BACKUP_OBJECT"
+)
 ```
 
-결과가 `ok`인지 확인하고 날짜, 객체 이름, 결과를 운영 기록에 남긴다. 실제 장애 복구는 API 쓰기를 멈춘 뒤 수행한다.
+성공 메시지의 날짜, 선택한 객체 이름, 결과를 운영 기록에 남긴다. 실제 장애 복구도 별도의 새 staging directory에 선택한 객체를 다시 내려받는다. 객체 이름 검증과 다운로드가 성공한 뒤에만 API 쓰기를 멈추고 실제 DB 복구를 수행한다.
 
 ```bash
-docker compose --env-file .env.production -f compose.production.yaml stop api
-sudo RESTORE_SOURCE=/tmp/restore-source.sqlite RESTORE_TARGET=/data/overtime/overtime.sqlite CONFIRM_RESTORE=YES ./docker/restore.sh
-sudo chown 10001:10001 /data/overtime/overtime.sqlite
-docker compose --env-file .env.production -f compose.production.yaml up -d api
-curl --fail https://aims-overtime.duckdns.org/api/health
+(
+  set -euo pipefail
+  RESTORE_TMP_DIR=$(mktemp -d)
+  trap 'rm -rf "$RESTORE_TMP_DIR"' EXIT
+  read -r -p '실제 복구할 Object Storage 객체 이름: ' OCI_BACKUP_OBJECT
+  if [[ ! "$OCI_BACKUP_OBJECT" =~ ^overtime-[0-9]{8}T[0-9]{6}Z\.sqlite$ ]]; then
+    echo '중지: overtime-YYYYMMDDTHHMMSSZ.sqlite 형식의 객체 이름이 아닙니다.' >&2
+    exit 1
+  fi
+  printf '선택한 실제 복구 객체: %s\n' "$OCI_BACKUP_OBJECT"
+  RESTORE_SOURCE="$RESTORE_TMP_DIR/$OCI_BACKUP_OBJECT"
+  oci os object get --auth instance_principal --bucket-name aims-overtime-backups --name "$OCI_BACKUP_OBJECT" --file "$RESTORE_SOURCE"
+  test -s "$RESTORE_SOURCE"
+  docker compose --env-file .env.production -f compose.production.yaml stop api
+  sudo env RESTORE_SOURCE="$RESTORE_SOURCE" RESTORE_TARGET=/data/overtime/overtime.sqlite CONFIRM_RESTORE=YES ./docker/restore.sh
+  sudo chown 10001:10001 /data/overtime/overtime.sqlite
+  docker compose --env-file .env.production -f compose.production.yaml up -d api
+  curl --fail https://aims-overtime.duckdns.org/api/health
+  printf '실제 복구 성공: %s %s\n' "$(date -u +%FT%TZ)" "$OCI_BACKUP_OBJECT"
+)
 ```
 
 복구 뒤 사용자 수, 최근 기록과 월 합계를 표본 확인하고 유실 가능 시간대를 기록한다. 앱 버전 롤백은 DB migration을 자동으로 되돌리지 않으므로, 스키마 변경 장애라면 배포 전 백업으로 DB까지 복구할지 별도로 판단한다.
@@ -293,7 +340,14 @@ curl --fail https://aims-overtime.duckdns.org/api/health
 ```bash
 cd /opt/overtime
 sudo systemctl start overtime-backup.service
-sudo systemctl status overtime-backup.service --no-pager
+sudo systemctl status overtime-backup.service --no-pager || true
+BACKUP_STATE=$(sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus)
+printf '%s\n' "$BACKUP_STATE"
+sudo journalctl -u overtime-backup.service --since today --no-pager
+if ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'Result=success' || ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'ExecMainStatus=0'; then
+  echo '중지: 배포 전 백업 oneshot이 성공하지 않았습니다.' >&2
+  exit 1
+fi
 git rev-parse HEAD
 git pull --ff-only
 docker compose --env-file .env.production -f compose.production.yaml up -d --build
