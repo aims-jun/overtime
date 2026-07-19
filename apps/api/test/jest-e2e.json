@@ -4,6 +4,9 @@
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "setupFiles": ["<rootDir>/setup-env.ts"],
+  "setupFilesAfterEnv": ["<rootDir>/reset-postgres.ts"],
+  "globalSetup": "<rootDir>/postgres-global-setup.ts",
+  "globalTeardown": "<rootDir>/postgres-global-teardown.ts",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }

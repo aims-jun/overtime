@@ -1,0 +1,16 @@
+services:
+  postgres-test:
+    image: postgres:17.10-bookworm
+    environment:
+      POSTGRES_USER: overtime_test
+      POSTGRES_PASSWORD: overtime_test
+      POSTGRES_DB: overtime_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U overtime_test -d overtime_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
