@@ -13,22 +13,22 @@ import { UserEntity } from './user.entity';
 @Index('idx_sessions_token_hash', ['tokenHash'], { unique: true })
 @Index('idx_sessions_expires_at', ['expiresAt'])
 export class SessionEntity {
-  @PrimaryColumn('text')
+  @PrimaryColumn('uuid')
   id!: string;
 
-  @Column('text')
+  @Column('text', { name: 'token_hash' })
   tokenHash!: string;
 
-  @Column('text')
+  @Column('uuid', { name: 'user_id' })
   userId!: string;
 
   @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'userId' })
+  @JoinColumn({ name: 'user_id' })
   user!: UserEntity;
 
-  @Column('datetime')
+  @Column('timestamptz', { name: 'expires_at' })
   expiresAt!: Date;
 
-  @CreateDateColumn({ type: 'datetime' })
+  @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
 }

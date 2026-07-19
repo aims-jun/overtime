@@ -9,10 +9,10 @@ import {
 @Entity('users')
 @Index('idx_users_google_subject', ['googleSubject'], { unique: true })
 export class UserEntity {
-  @PrimaryColumn('text')
+  @PrimaryColumn('uuid')
   id!: string;
 
-  @Column('text')
+  @Column('text', { name: 'google_subject' })
   googleSubject!: string;
 
   @Column('text')
@@ -21,12 +21,12 @@ export class UserEntity {
   @Column('text')
   name!: string;
 
-  @Column('text', { nullable: true })
+  @Column('text', { name: 'profile_image_url', nullable: true })
   profileImageUrl!: string | null;
 
-  @CreateDateColumn({ type: 'datetime' })
+  @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;
 
-  @Column('datetime')
+  @Column('timestamptz', { name: 'last_login_at' })
   lastLoginAt!: Date;
 }
