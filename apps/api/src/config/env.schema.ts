@@ -4,7 +4,7 @@ export type Env = {
   NODE_ENV: 'development' | 'test' | 'production';
   PORT: number;
   APP_ORIGINS: string[];
-  DATABASE_PATH: string;
+  DATABASE_URL: string;
   GOOGLE_CLIENT_ID: string;
   GOOGLE_HOSTED_DOMAIN: string;
   ADMIN_EMAILS: string[];
@@ -28,7 +28,14 @@ const envSchema = z
           .filter(Boolean),
       )
       .pipe(z.array(z.url()).min(1)),
-    DATABASE_PATH: z.string().trim().min(1),
+    DATABASE_URL: z
+      .string()
+      .url()
+      .refine(
+        (value) =>
+          ['postgres:', 'postgresql:'].includes(new URL(value).protocol),
+        'PostgreSQL URL이어야 합니다.',
+      ),
     GOOGLE_CLIENT_ID: z.string().trim().min(1),
     GOOGLE_HOSTED_DOMAIN: z
       .string()

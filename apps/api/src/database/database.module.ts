@@ -9,7 +9,7 @@ import { createTypeOrmOptions } from './typeorm.config';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) =>
-        createTypeOrmOptions(config.get('DATABASE_PATH', { infer: true })),
+        createTypeOrmOptions(config.get('DATABASE_URL', { infer: true })),
     }),
   ],
 })

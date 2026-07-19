@@ -5,7 +5,7 @@ const validEnv: NodeJS.ProcessEnv = {
   PORT: '3000',
   APP_ORIGINS:
     'http://localhost:5173, http://localhost:5174,http://localhost:5175',
-  DATABASE_PATH: './data/overtime.sqlite',
+  DATABASE_URL: 'postgresql://overtime_app:test@127.0.0.1:55432/overtime_test',
   GOOGLE_CLIENT_ID: 'client.apps.googleusercontent.com',
   GOOGLE_HOSTED_DOMAIN: 'Company.COM',
   ADMIN_EMAILS: 'Admin@Company.com, second@company.com',
@@ -35,6 +35,13 @@ describe('parseEnv', () => {
       parseEnv({ ...validEnv, SESSION_HASH_SECRET: 'short' }),
     ).toThrow();
   });
+
+  it.each(['./data/overtime.sqlite', 'mysql://user:pass@localhost/db'])(
+    'rejects a non-PostgreSQL DATABASE_URL: %s',
+    (DATABASE_URL) => {
+      expect(() => parseEnv({ ...validEnv, DATABASE_URL })).toThrow();
+    },
+  );
 
   it('requires an HTTPS origin in production', () => {
     expect(() =>
