@@ -7,7 +7,6 @@ Object.assign(process.env, {
     'postgresql://overtime_test:overtime_test@127.0.0.1:55432/overtime_test',
   DATABASE_MIGRATION_URL:
     'postgresql://overtime_test:overtime_test@127.0.0.1:55432/overtime_test',
-  SQLITE_SOURCE_PATH: './data/nonexistent-e2e-source.sqlite',
   GOOGLE_CLIENT_ID: 'test-client.apps.googleusercontent.com',
   GOOGLE_HOSTED_DOMAIN: 'company.com',
   ADMIN_EMAILS: 'admin@company.com',

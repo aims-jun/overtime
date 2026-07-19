@@ -7,7 +7,12 @@ type PostgresTestGlobal = typeof globalThis & {
 };
 
 export default async function postgresGlobalSetup(): Promise<void> {
-  const dataSource = createMigrationDataSource();
+  const databaseUrl = process.env.DATABASE_MIGRATION_URL;
+  if (!databaseUrl) {
+    throw new Error('DATABASE_MIGRATION_URL is required for PostgreSQL E2E');
+  }
+
+  const dataSource = createMigrationDataSource(databaseUrl);
   await dataSource.initialize();
 
   try {

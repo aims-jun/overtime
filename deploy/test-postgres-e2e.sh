@@ -10,5 +10,6 @@ cleanup() {
 
 trap cleanup EXIT
 
+bash deploy/test-postgres-e2e-contract.sh
 docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE}" up -d --wait
 npm run test:e2e -w apps/api
