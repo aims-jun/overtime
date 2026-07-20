@@ -95,7 +95,7 @@ set -a
 . ./.env.production
 set +a
 docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps \
-  -e DATABASE_MIGRATION_URL -e SQLITE_SOURCE_PATH=/not-used \
+  -e DATABASE_MIGRATION_URL \
   api npm run db:migrate
 docker compose --env-file .env.production -f compose.production.yaml exec -T postgres \
   psql --username postgres --dbname overtime --set=ON_ERROR_STOP=1 \
@@ -119,7 +119,17 @@ docker compose --env-file .env.production -f compose.production.yaml run --rm --
   api npm run db:migrate:sqlite
 ```
 
-source/target users·records ID/count/hash, target sessions 0, orphan 0, 집계, migration version을 독립 조회로 다시 확인한다. 검증 전에는 서비스를 재개하지 않는다.
+이관 CLI가 commit한 다음, API를 시작하기 전에 같은 read-only SQLite snapshot과 commit된 PostgreSQL을 독립 CLI로 다시 검증한다. 이 명령은 schema migration이나 data write를 실행하지 않는다.
+
+```bash
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps \
+  -v /data/overtime/sqlite-archive:/migration-source:ro \
+  -e SQLITE_SOURCE_PATH=/migration-source/<final-snapshot-name> \
+  -e DATABASE_MIGRATION_URL \
+  api npm run db:verify:sqlite
+```
+
+출력의 `source`·`target` users/records count가 일치하고, `hashes`에 ID set·business fields·duration aggregate hash가 모두 표시되어야 한다. `"sessions":0`, `"orphans":0`, `"migrations":["InitialSchema1752360000000"]`, `"verification":"passed"`를 모두 확인한다. 하나라도 틀리거나 명령이 nonzero로 종료하면 서비스를 재개하지 않는다.
 
 rollback 경계는 서비스 재개다. 재개 전이고 PostgreSQL user write가 0일 때만 보존한 SQLite image/env로 복귀할 수 있다. 재개 후는 PostgreSQL이 source of truth이며 SQLite로 돌아가지 않는다. SQLite snapshot은 30일 동안 read-only로 보존한 뒤 별도 승인과 checksum 대조 후 폐기한다.
 

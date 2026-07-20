@@ -68,6 +68,25 @@ if ! grep -q 'GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO overtime_backup'
   exit 1
 fi
 
+cutover_migration_line="$(grep -n 'npm run db:migrate:sqlite' "$runbook" | head -1 | cut -d: -f1)"
+cutover_verify_line="$(grep -n 'npm run db:verify:sqlite' "$runbook" | head -1 | cut -d: -f1 || true)"
+if [[ -z "$cutover_verify_line" || "$cutover_verify_line" -le "$cutover_migration_line" ]]; then
+  echo 'cutover runbook must run the read-only post-commit verifier after migration' >&2
+  exit 1
+fi
+for field in source target hashes; do
+  if ! grep -q "\`$field" "$runbook"; then
+    echo "cutover verifier documentation must require the $field result" >&2
+    exit 1
+  fi
+done
+for field in sessions orphans migrations verification; do
+  if ! grep -q "\"$field\"" "$runbook"; then
+    echo "cutover verifier documentation must require the $field JSON result" >&2
+    exit 1
+  fi
+done
+
 mode_line="$(require_line 'stat -c.*env.production.*600' 'actual restore must require mode 0600 production env')"
 source_prod_line="$(require_line '^ *\. /opt/overtime/\.env.production' 'actual restore must load the trusted production env')"
 source_backup_line="$(require_line '^ *\. /opt/overtime/\.env.backup' 'actual restore must load the trusted backup env')"

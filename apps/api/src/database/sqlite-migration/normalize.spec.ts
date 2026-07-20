@@ -42,6 +42,48 @@ describe('SQLite migration normalization', () => {
     });
   });
 
+  it('parses TypeORM SQLite timestamps as UTC outside the UTC timezone', () => {
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Asia/Seoul';
+    try {
+      const user = normalizeUserRow({
+        id: '11111111-1111-4111-8111-111111111111',
+        googleSubject: 'google-subject-1',
+        email: 'person@example.com',
+        name: '이지은',
+        profileImageUrl: null,
+        createdAt: '2026-07-10 09:00:00.000',
+        lastLoginAt: '2026-07-10 10:00:00.000',
+      });
+
+      expect(user.createdAt.toISOString()).toBe('2026-07-10T09:00:00.000Z');
+      expect(user.lastLoginAt.toISOString()).toBe('2026-07-10T10:00:00.000Z');
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
+  });
+
+  it.each([
+    '2026-02-30T09:00:00.000Z',
+    '2026-07-10T09:00:00.000',
+    '2026-07-10 25:00:00.000',
+  ])('rejects ambiguous or rolling timestamp %s', (createdAt) => {
+    expect(() =>
+      normalizeUserRow({
+        id: '11111111-1111-4111-8111-111111111111',
+        googleSubject: 'google-subject-1',
+        email: 'person@example.com',
+        name: '이지은',
+        profileImageUrl: null,
+        createdAt,
+        lastLoginAt: '2026-07-10T10:00:00.000Z',
+      }),
+    ).toThrow(
+      'invalid timestamp at users row 11111111-1111-4111-8111-111111111111',
+    );
+  });
+
   it('rejects an invalid UUID with only the row ID and failure kind', () => {
     expect(() =>
       normalizeUserRow({

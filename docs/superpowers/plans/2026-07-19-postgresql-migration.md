@@ -120,7 +120,8 @@ npm install -D @types/pg -w apps/api
 
 ```json
 "db:migrate": "node dist/database/run-migrations.js",
-"db:migrate:sqlite": "node dist/database/sqlite-migration/cli.js"
+"db:migrate:sqlite": "node dist/database/sqlite-migration/cli.js",
+"db:verify:sqlite": "node dist/database/sqlite-migration/post-verify-cli.js"
 ```
 
 - [ ] **Step 4: 런타임·migration 환경 스키마 구현**
@@ -1080,7 +1081,17 @@ docker compose --env-file .env.production -f compose.production.yaml run --rm --
 
 - [ ] **Step 5: commit 후 독립 재검증**
 
-CLI report만 신뢰하지 않고 별도 read-only queries로 다음을 다시 확인한다.
+CLI report만 신뢰하지 않고 final snapshot과 commit된 PostgreSQL을 읽는 독립 verifier를 실행한다.
+
+```bash
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps \
+  -v /data/overtime/sqlite-archive:/migration-source:ro \
+  -e SQLITE_SOURCE_PATH=/migration-source/<FINAL_SNAPSHOT> \
+  -e DATABASE_MIGRATION_URL \
+  api npm run db:verify:sqlite
+```
+
+명령이 0으로 종료하고 `"verification":"passed"`를 출력할 때만 다음을 통과한 것으로 판단한다.
 
 - source/target users exact ID set/count
 - source/target records exact ID set/count

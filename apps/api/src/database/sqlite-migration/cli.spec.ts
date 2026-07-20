@@ -30,6 +30,8 @@ describe('SQLite migration CLI safety', () => {
     'invalid timestamp at overtime_records row aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     'target is not empty',
     'verification mismatch: foreign keys',
+    'verification mismatch: sessions',
+    'verification mismatch: migration version',
   ])('allows the safe migration error: %s', (message) => {
     expect(safeErrorMessage(new Error(message))).toBe(message);
   });

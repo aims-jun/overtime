@@ -172,6 +172,13 @@ if [[ "$migration_summary" != *'"verification":"passed"'* ]]; then
 fi
 
 printf '6/8 deterministic verification\n'
+post_verification_summary="$(DATABASE_MIGRATION_URL="$database_url" \
+  SQLITE_SOURCE_PATH="$sqlite_backup" npm run db:verify:sqlite -w apps/api)"
+printf '%s\n' "$post_verification_summary"
+if [[ "$post_verification_summary" != *'"verification":"passed"'* ]]; then
+  echo 'post-commit verification did not report success' >&2
+  exit 1
+fi
 target_result="$("${compose[@]}" exec -T postgres-test psql \
   --username overtime_test --dbname "$target_database" --tuples-only --no-align \
   --command="SELECT (SELECT COUNT(*) FROM users) || '|' || (SELECT COUNT(*) FROM overtime_records) || '|' || (SELECT COUNT(*) FROM sessions) || '|' || (SELECT COUNT(*) FROM migrations);" \

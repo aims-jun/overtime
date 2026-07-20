@@ -7,6 +7,7 @@ import { createMigrationDataSource } from '../migration-data-source';
 import { SessionEntity } from '../entities/session.entity';
 import { UserEntity } from '../entities/user.entity';
 import { migrateSqliteToPostgres } from './migrate';
+import { verifySqliteToPostgresAfterCommit } from './post-verify';
 
 const DATABASE_URL =
   process.env.DATABASE_MIGRATION_URL ??
@@ -154,6 +155,9 @@ describe('migrateSqliteToPostgres', () => {
     await target.query(
       'TRUNCATE TABLE sessions, overtime_records, users CASCADE',
     );
+    await target.query(
+      `DELETE FROM migrations WHERE name <> 'InitialSchema1752360000000'`,
+    );
   });
 
   afterAll(async () => {
@@ -187,6 +191,75 @@ describe('migrateSqliteToPostgres', () => {
     expect(await target.getRepository(SessionEntity).count()).toBe(0);
   });
 
+  it('independently verifies the committed target against the SQLite snapshot', async () => {
+    const sqlitePath = fixture();
+    await migrateSqliteToPostgres({ sqlitePath, target });
+
+    const report = await verifySqliteToPostgresAfterCommit({
+      sqlitePath,
+      target,
+    });
+
+    expect(report.source.counts).toEqual({ users: 2, overtimeRecords: 3 });
+    expect(report.target).toEqual(report.source);
+    expect(report.sessions).toBe(0);
+    expect(report.orphans).toBe(0);
+    expect(report.migrations).toEqual(['InitialSchema1752360000000']);
+  });
+
+  it('rejects committed targets containing pre-cutover sessions', async () => {
+    const sqlitePath = fixture();
+    await migrateSqliteToPostgres({ sqlitePath, target });
+    await target.query(
+      `INSERT INTO sessions (id, token_hash, user_id, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+        'post-commit-session-hash',
+        USERS[0].id,
+        '2026-08-01T00:00:00.000Z',
+        '2026-07-01T00:00:00.000Z',
+      ],
+    );
+
+    await expect(
+      verifySqliteToPostgresAfterCommit({ sqlitePath, target }),
+    ).rejects.toThrow('verification mismatch: sessions');
+  });
+
+  it('rejects an unexpected committed migration version', async () => {
+    const sqlitePath = fixture();
+    await migrateSqliteToPostgres({ sqlitePath, target });
+    await target.query(
+      `INSERT INTO migrations (timestamp, name)
+       VALUES ($1, $2)`,
+      [1752360000001, 'UnexpectedMigration1752360000001'],
+    );
+
+    try {
+      await expect(
+        verifySqliteToPostgresAfterCommit({ sqlitePath, target }),
+      ).rejects.toThrow('verification mismatch: migration version');
+    } finally {
+      await target.query(
+        `DELETE FROM migrations WHERE name = 'UnexpectedMigration1752360000001'`,
+      );
+    }
+  });
+
+  it('rejects committed target business data changed after migration', async () => {
+    const sqlitePath = fixture();
+    await migrateSqliteToPostgres({ sqlitePath, target });
+    await target.query(
+      'UPDATE overtime_records SET reason = $1 WHERE id = $2',
+      ['post-commit mutation', RECORDS[0].id],
+    );
+
+    await expect(
+      verifySqliteToPostgresAfterCommit({ sqlitePath, target }),
+    ).rejects.toThrow('verification mismatch: business fields');
+  });
+
   it('migrates and verifies mixed-case source UUIDs as lowercase', async () => {
     const sqlitePath = fixture((database) => {
       database.exec(`
@@ -201,6 +274,27 @@ describe('migrateSqliteToPostgres', () => {
     expect(
       await target.query('SELECT id::text AS id FROM users ORDER BY id'),
     ).toEqual(USERS.map(({ id }) => ({ id })));
+  });
+
+  it('preserves TypeORM SQLite UTC timestamps in a non-UTC process', async () => {
+    const sqlitePath = fixture((database) => {
+      database
+        .prepare('UPDATE overtime_records SET startAt = ? WHERE id = ?')
+        .run('2026-07-10 09:00:00.000', RECORDS[0].id);
+    });
+    const previousTimezone = process.env.TZ;
+    process.env.TZ = 'Asia/Seoul';
+    try {
+      await migrateSqliteToPostgres({ sqlitePath, target });
+      const [row] = await target.query<Array<{ startAt: Date }>>(
+        'SELECT start_at AS "startAt" FROM overtime_records WHERE id = $1',
+        [RECORDS[0].id],
+      );
+      expect(row?.startAt.toISOString()).toBe('2026-07-10T09:00:00.000Z');
+    } finally {
+      if (previousTimezone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousTimezone;
+    }
   });
 
   it('reads both SQLite tables inside one source transaction', async () => {

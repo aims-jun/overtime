@@ -14,6 +14,7 @@
     "start:prod": "node dist/main",
     "db:migrate": "node dist/database/run-migrations.js",
     "db:migrate:sqlite": "node dist/database/sqlite-migration/cli.js",
+    "db:verify:sqlite": "node dist/database/sqlite-migration/post-verify-cli.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

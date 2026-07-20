@@ -8,6 +8,10 @@ import type {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const WORK_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const SQLITE_UTC_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?$/;
+const ISO_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/;
 
 function validate(value: string): boolean {
   return UUID_PATTERN.test(value);
@@ -21,11 +25,53 @@ function normalizeUuid(value: string, table: string, rowId: string): string {
 }
 
 function parseTimestamp(value: string, table: string, rowId: string): Date {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const sqliteMatch = SQLITE_UTC_TIMESTAMP_PATTERN.exec(value);
+  const isoMatch = ISO_TIMESTAMP_PATTERN.exec(value);
+  const match = sqliteMatch ?? isoMatch;
+  const normalizedValue = sqliteMatch ? `${value.replace(' ', 'T')}Z` : value;
+  const date = new Date(normalizedValue);
+  if (!match || !hasValidDateTimeParts(match) || Number.isNaN(date.getTime())) {
     throw new Error(`invalid timestamp at ${table} row ${rowId}`);
   }
   return date;
+}
+
+function hasValidDateTimeParts(match: RegExpExecArray): boolean {
+  const [
+    ,
+    yearValue,
+    monthValue,
+    dayValue,
+    hourValue,
+    minuteValue,
+    secondValue,
+  ] = match;
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  const hour = Number(hourValue);
+  const minute = Number(minuteValue);
+  const second = Number(secondValue);
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth(year, month) &&
+    hour >= 0 &&
+    hour <= 23 &&
+    minute >= 0 &&
+    minute <= 59 &&
+    second >= 0 &&
+    second <= 59
+  );
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+    return isLeapYear ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
 }
 
 function normalizeWorkDate(value: string, rowId: string): string {

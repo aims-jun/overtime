@@ -68,6 +68,9 @@ cat > "$tmp/bin/npm" <<'EOF'
 set -euo pipefail
 printf 'npm %s\n' "$*" >> "$REHEARSAL_CALL_LOG"
 case " $* " in
+  *' run db:verify:sqlite '*)
+    printf '{"source":{"users":2,"overtimeRecords":3},"target":{"users":2,"overtimeRecords":3},"hashes":{"userIds":"safe"},"sessions":0,"orphans":0,"migrations":["InitialSchema1752360000000"],"verification":"passed"}\n'
+    ;;
   *' run db:migrate:sqlite '*)
     count="$(grep -c '^npm run db:migrate:sqlite ' "$REHEARSAL_CALL_LOG")"
     if [[ "$count" == 1 ]]; then
@@ -202,6 +205,7 @@ integrity_line="$(grep -n 'sqlite3 PRAGMA integrity_check' "$tmp/calls.log" | cu
 checksum_line="$(grep -n '^sha256sum$' "$tmp/calls.log" | head -1 | cut -d: -f1)"
 schema_line="$(grep -n '^npm run db:migrate -w ' "$tmp/calls.log" | cut -d: -f1)"
 migration_line="$(grep -n '^npm run db:migrate:sqlite -w ' "$tmp/calls.log" | head -1 | cut -d: -f1)"
+post_verify_line="$(grep -n '^npm run db:verify:sqlite -w ' "$tmp/calls.log" | cut -d: -f1)"
 verification_line="$(grep -n 'docker .*COUNT.*sessions' "$tmp/calls.log" | cut -d: -f1)"
 smoke_line="$(grep -n '^curl ' "$tmp/calls.log" | cut -d: -f1)"
 cleanup_line="$(grep -n 'docker .* down -v$' "$tmp/calls.log" | cut -d: -f1)"
@@ -209,7 +213,8 @@ test "$backup_line" -lt "$integrity_line"
 test "$integrity_line" -lt "$checksum_line"
 test "$checksum_line" -lt "$schema_line"
 test "$schema_line" -lt "$migration_line"
-test "$migration_line" -lt "$verification_line"
+test "$migration_line" -lt "$post_verify_line"
+test "$post_verify_line" -lt "$verification_line"
 test "$verification_line" -lt "$smoke_line"
 test "$smoke_line" -lt "$cleanup_line"
 

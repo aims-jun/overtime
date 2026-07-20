@@ -43,7 +43,7 @@ export async function migrateSqliteToPostgres({
   target,
 }: MigrationInput): Promise<MigrationReport> {
   await assertEmptyTarget(target.manager);
-  const rows = readSource(sqlitePath);
+  const rows = readSqliteMigrationRows(sqlitePath);
   assertForeignKeysValid(rows);
   const source = createMigrationSnapshot(rows);
 
@@ -56,7 +56,7 @@ export async function migrateSqliteToPostgres({
       await manager.insert(OvertimeRecordEntity, rows.overtimeRecords);
     }
 
-    const targetRows = await readTarget(manager);
+    const targetRows = await readPostgresMigrationRows(manager);
     const targetSnapshot = createMigrationSnapshot(targetRows);
     assertForeignKeysValid(targetRows);
     assertMigrationVerified(source, targetSnapshot);
@@ -74,7 +74,7 @@ export async function migrateSqliteToPostgres({
   });
 }
 
-function readSource(sqlitePath: string): MigrationRows {
+export function readSqliteMigrationRows(sqlitePath: string): MigrationRows {
   const database = new Database(sqlitePath, {
     readonly: true,
     fileMustExist: true,
@@ -106,7 +106,9 @@ async function assertEmptyTarget(manager: EntityManager): Promise<void> {
   }
 }
 
-async function readTarget(manager: EntityManager): Promise<MigrationRows> {
+export async function readPostgresMigrationRows(
+  manager: EntityManager,
+): Promise<MigrationRows> {
   const [users, overtimeRecords] = await Promise.all([
     manager.find(UserEntity, { order: { id: 'ASC' } }),
     manager.find(OvertimeRecordEntity, { order: { id: 'ASC' } }),

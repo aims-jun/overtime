@@ -38,7 +38,7 @@ export function safeErrorMessage(error: unknown): string {
       error.message,
     ) ||
     error.message === 'target is not empty' ||
-    /^verification mismatch(?:: (counts|ID sets|business fields|duration aggregates|foreign keys))?$/.test(
+    /^verification mismatch(?:: (counts|ID sets|business fields|duration aggregates|foreign keys|sessions|migration version))?$/.test(
       error.message,
     )
   ) {
