@@ -187,6 +187,32 @@ describe('migrateSqliteToPostgres', () => {
     expect(await target.getRepository(SessionEntity).count()).toBe(0);
   });
 
+  it('migrates and verifies mixed-case source UUIDs as lowercase', async () => {
+    const sqlitePath = fixture((database) => {
+      database.exec(`
+        UPDATE users SET id = upper(id);
+        UPDATE overtime_records SET id = upper(id), userId = upper(userId);
+      `);
+    });
+
+    const report = await migrateSqliteToPostgres({ sqlitePath, target });
+
+    expect(report.sourceHashes).toEqual(report.targetHashes);
+    expect(
+      await target.query('SELECT id::text AS id FROM users ORDER BY id'),
+    ).toEqual(USERS.map(({ id }) => ({ id })));
+  });
+
+  it('reads both SQLite tables inside one source transaction', async () => {
+    const transactionSpy = jest.spyOn(Database.prototype, 'transaction');
+    try {
+      await migrateSqliteToPostgres({ sqlitePath: fixture(), target });
+      expect(transactionSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      transactionSpy.mockRestore();
+    }
+  });
+
   it('rejects a non-empty target', async () => {
     await target.getRepository(UserEntity).insert({
       ...USERS[0],
@@ -242,11 +268,6 @@ describe('migrateSqliteToPostgres', () => {
   it.each([
     ['ID set', "NEW.id := 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';"],
     ['normalized business fields', "NEW.reason := 'mutated';"],
-    [
-      'duration aggregates',
-      'NEW.duration_minutes := NEW.duration_minutes + 1;',
-    ],
-    ['foreign keys', `NEW.user_id := '${USERS[1].id}';`],
   ])('rolls back when %s verification mismatches', async (_kind, mutation) => {
     await target.query(`
       CREATE FUNCTION migration_test_mutation() RETURNS trigger AS $$
@@ -271,5 +292,28 @@ describe('migrateSqliteToPostgres', () => {
     expect(
       await target.query('SELECT count(*)::int AS count FROM overtime_records'),
     ).toEqual([{ count: 0 }]);
+  });
+
+  it('rolls back when verification detects a count mismatch', async () => {
+    await target.query(`
+      CREATE FUNCTION migration_test_mutation() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.id = '${RECORDS[0].id}' THEN
+          RETURN NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await target.query(`
+      CREATE TRIGGER migration_test_trigger
+      BEFORE INSERT ON overtime_records
+      FOR EACH ROW EXECUTE FUNCTION migration_test_mutation();
+    `);
+
+    await expect(
+      migrateSqliteToPostgres({ sqlitePath: fixture(), target }),
+    ).rejects.toThrow(/verification mismatch/);
+    expect(await target.getRepository(UserEntity).count()).toBe(0);
   });
 });

@@ -23,6 +23,25 @@ describe('SQLite migration normalization', () => {
     });
   });
 
+  it('canonicalizes accepted UUIDs to lowercase', () => {
+    expect(
+      normalizeOvertimeRow({
+        id: 'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+        userId: 'BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB',
+        workDate: '2026-07-01',
+        startAt: '2026-07-01T09:00:00.000Z',
+        endAt: '2026-07-01T10:00:00.000Z',
+        durationMinutes: 60,
+        reason: 'case normalization',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+      }),
+    ).toMatchObject({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      userId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    });
+  });
+
   it('rejects an invalid UUID with only the row ID and failure kind', () => {
     expect(() =>
       normalizeUserRow({

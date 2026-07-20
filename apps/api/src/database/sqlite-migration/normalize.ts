@@ -13,10 +13,11 @@ function validate(value: string): boolean {
   return UUID_PATTERN.test(value);
 }
 
-function assertUuid(value: string, table: string, rowId: string): void {
+function normalizeUuid(value: string, table: string, rowId: string): string {
   if (!validate(value)) {
     throw new Error(`invalid UUID at ${table} row ${rowId}`);
   }
+  return value.toLowerCase();
 }
 
 function parseTimestamp(value: string, table: string, rowId: string): Date {
@@ -46,9 +47,8 @@ function normalizeWorkDate(value: string, rowId: string): string {
 }
 
 export function normalizeUserRow(row: SqliteUserRow): NormalizedUserRow {
-  assertUuid(row.id, 'users', row.id);
   return {
-    id: row.id,
+    id: normalizeUuid(row.id, 'users', row.id),
     googleSubject: row.googleSubject,
     email: row.email,
     name: row.name,
@@ -61,11 +61,9 @@ export function normalizeUserRow(row: SqliteUserRow): NormalizedUserRow {
 export function normalizeOvertimeRow(
   row: SqliteOvertimeRow,
 ): NormalizedOvertimeRow {
-  assertUuid(row.id, 'overtime_records', row.id);
-  assertUuid(row.userId, 'overtime_records', row.id);
   return {
-    id: row.id,
-    userId: row.userId,
+    id: normalizeUuid(row.id, 'overtime_records', row.id),
+    userId: normalizeUuid(row.userId, 'overtime_records', row.id),
     workDate: normalizeWorkDate(row.workDate, row.id),
     startAt: parseTimestamp(row.startAt, 'overtime_records', row.id),
     endAt: parseTimestamp(row.endAt, 'overtime_records', row.id),

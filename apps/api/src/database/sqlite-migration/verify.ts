@@ -6,7 +6,7 @@ import type {
   NormalizedUserRow,
 } from './types';
 
-type MigrationRows = {
+export type MigrationRows = {
   users: NormalizedUserRow[];
   overtimeRecords: NormalizedOvertimeRow[];
 };
@@ -72,11 +72,46 @@ export function assertMigrationVerified(
   source: MigrationSnapshot,
   target: MigrationSnapshot,
 ): void {
+  assertCountsMatch(source.counts, target.counts);
   if (
-    JSON.stringify(source.counts) !== JSON.stringify(target.counts) ||
-    JSON.stringify(source.hashes) !== JSON.stringify(target.hashes)
+    source.hashes.userIds !== target.hashes.userIds ||
+    source.hashes.overtimeRecordIds !== target.hashes.overtimeRecordIds
   ) {
-    throw new Error('verification mismatch');
+    throw new Error('verification mismatch: ID sets');
+  }
+  if (source.hashes.businessFields !== target.hashes.businessFields) {
+    throw new Error('verification mismatch: business fields');
+  }
+}
+
+export function assertCountsMatch(
+  source: MigrationCounts,
+  target: MigrationCounts,
+): void {
+  if (
+    source.users !== target.users ||
+    source.overtimeRecords !== target.overtimeRecords
+  ) {
+    throw new Error('verification mismatch: counts');
+  }
+}
+
+export function assertDurationAggregatesMatch(
+  source: readonly NormalizedOvertimeRow[],
+  target: readonly NormalizedOvertimeRow[],
+): void {
+  if (
+    hashRows(durationAggregateRows(source)) !==
+    hashRows(durationAggregateRows(target))
+  ) {
+    throw new Error('verification mismatch: duration aggregates');
+  }
+}
+
+export function assertForeignKeysValid(rows: MigrationRows): void {
+  const userIds = new Set(rows.users.map(({ id }) => id));
+  if (rows.overtimeRecords.some(({ userId }) => !userIds.has(userId))) {
+    throw new Error('verification mismatch: foreign keys');
   }
 }
 

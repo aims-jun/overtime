@@ -10,7 +10,12 @@ import type {
   SqliteOvertimeRow,
   SqliteUserRow,
 } from './types';
-import { assertMigrationVerified, createMigrationSnapshot } from './verify';
+import {
+  assertDurationAggregatesMatch,
+  assertForeignKeysValid,
+  assertMigrationVerified,
+  createMigrationSnapshot,
+} from './verify';
 
 const USERS_QUERY = `
   SELECT id, googleSubject, email, name, profileImageUrl, createdAt, lastLoginAt
@@ -39,6 +44,7 @@ export async function migrateSqliteToPostgres({
 }: MigrationInput): Promise<MigrationReport> {
   await assertEmptyTarget(target.manager);
   const rows = readSource(sqlitePath);
+  assertForeignKeysValid(rows);
   const source = createMigrationSnapshot(rows);
 
   return target.transaction('SERIALIZABLE', async (manager) => {
@@ -52,8 +58,12 @@ export async function migrateSqliteToPostgres({
 
     const targetRows = await readTarget(manager);
     const targetSnapshot = createMigrationSnapshot(targetRows);
-    assertForeignKeys(targetRows);
+    assertForeignKeysValid(targetRows);
     assertMigrationVerified(source, targetSnapshot);
+    assertDurationAggregatesMatch(
+      rows.overtimeRecords,
+      targetRows.overtimeRecords,
+    );
 
     return {
       source: source.counts,
@@ -70,15 +80,17 @@ function readSource(sqlitePath: string): MigrationRows {
     fileMustExist: true,
   });
   try {
-    const users = database
-      .prepare(USERS_QUERY)
-      .all()
-      .map((row) => normalizeUserRow(row as SqliteUserRow));
-    const overtimeRecords = database
-      .prepare(OVERTIME_RECORDS_QUERY)
-      .all()
-      .map((row) => normalizeOvertimeRow(row as SqliteOvertimeRow));
-    return { users, overtimeRecords };
+    return database.transaction(() => {
+      const users = database
+        .prepare(USERS_QUERY)
+        .all()
+        .map((row) => normalizeUserRow(row as SqliteUserRow));
+      const overtimeRecords = database
+        .prepare(OVERTIME_RECORDS_QUERY)
+        .all()
+        .map((row) => normalizeOvertimeRow(row as SqliteOvertimeRow));
+      return { users, overtimeRecords };
+    })();
   } finally {
     database.close();
   }
@@ -100,11 +112,4 @@ async function readTarget(manager: EntityManager): Promise<MigrationRows> {
     manager.find(OvertimeRecordEntity, { order: { id: 'ASC' } }),
   ]);
   return { users, overtimeRecords };
-}
-
-function assertForeignKeys(rows: MigrationRows): void {
-  const userIds = new Set(rows.users.map(({ id }) => id));
-  if (rows.overtimeRecords.some(({ userId }) => !userIds.has(userId))) {
-    throw new Error('verification mismatch');
-  }
 }
