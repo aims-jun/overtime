@@ -36,6 +36,10 @@ case "$database_url" in
   postgres://*|postgresql://*) ;;
   *) echo 'rehearsal target must be a PostgreSQL URL' >&2; exit 1 ;;
 esac
+if [[ "$database_url" == *\?* ]]; then
+  echo 'refusing PostgreSQL URL query parameters' >&2
+  exit 1
+fi
 url_remainder="${database_url#*://}"
 authority="${url_remainder%%/*}"
 if [[ "$authority" == "$url_remainder" ]]; then
@@ -81,7 +85,7 @@ work_dir="$(mktemp -d)"
 sqlite_backup="$work_dir/source-backup.sqlite"
 archive="$work_dir/rehearsal.dump"
 restore_database="overtime_rehearsal_restore_$(date -u +%Y%m%d%H%M%S)$$"
-compose_started=0
+compose_cleanup_required=0
 api_pid=''
 restore_created=0
 cleanup_reported=0
@@ -105,7 +109,7 @@ cleanup() {
       status=1
     fi
   fi
-  if [[ "$compose_started" == 1 ]]; then
+  if [[ "$compose_cleanup_required" == 1 ]]; then
     if ! "${compose[@]}" down -v >/dev/null; then
       echo 'failed to tear down isolated rehearsal Compose project' >&2
       status=1
@@ -143,8 +147,8 @@ IFS='|' read -r source_users source_records <<< "$source_counts"
 printf 'source_backup_sha256=%s\n' "$source_checksum"
 printf 'source_counts users=%s overtime_records=%s\n' "$source_users" "$source_records"
 
+compose_cleanup_required=1
 "${compose[@]}" up -d --wait >/dev/null
-compose_started=1
 
 target_table_count="$("${compose[@]}" exec -T postgres-test psql \
   --username overtime_test --dbname "$target_database" --tuples-only --no-align \

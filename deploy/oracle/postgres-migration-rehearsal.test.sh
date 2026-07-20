@@ -43,7 +43,11 @@ cat > "$tmp/bin/docker" <<'EOF'
 set -euo pipefail
 printf 'POSTGRES_TEST_PORT=%s docker %s\n' "${POSTGRES_TEST_PORT:-unset}" "$*" >> "$REHEARSAL_CALL_LOG"
 case " $* " in
-  *' up -d --wait '*) ;;
+  *' up -d --wait '*)
+    if [[ "${REHEARSAL_DOCKER_UP_FAIL:-0}" == 1 ]]; then
+      exit 96
+    fi
+    ;;
   *' down -v '*) ;;
   *' pg_dump '*) printf 'representative archive\n' ;;
   *' pg_restore --list '*) printf 'archive catalog\n' ;;
@@ -111,6 +115,16 @@ fi
 grep -F 'refusing nonlocal PostgreSQL target' "$tmp/remote.err" >/dev/null
 test ! -e "$tmp/calls.log"
 
+if PATH="$tmp/bin:$PATH" \
+  DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55433/overtime_test?host=203.0.113.10&port=5432' \
+  REHEARSAL_POSTGRES_PORT=55433 \
+  bash "$script" "$fixture" >"$tmp/query-override.out" 2>"$tmp/query-override.err"; then
+  echo 'rehearsal accepted PostgreSQL URL query overrides' >&2
+  exit 1
+fi
+grep -F 'refusing PostgreSQL URL query parameters' "$tmp/query-override.err" >/dev/null
+test ! -e "$tmp/calls.log"
+
 if PATH="$tmp/bin:$PATH" DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55432/overtime' \
   bash "$script" "$fixture" >"$tmp/nontest.out" 2>"$tmp/nontest.err"; then
   echo 'rehearsal accepted a non-test PostgreSQL database' >&2
@@ -129,6 +143,18 @@ fi
 grep -F 'rehearsal PostgreSQL URL port must match REHEARSAL_POSTGRES_PORT' \
   "$tmp/port-mismatch.err" >/dev/null
 test ! -e "$tmp/calls.log"
+
+if PATH="$tmp/bin:$PATH" \
+  DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55433/overtime_test' \
+  REHEARSAL_POSTGRES_PORT=55433 \
+  REHEARSAL_DOCKER_UP_FAIL=1 \
+  bash "$script" "$fixture" >"$tmp/partial-up.out" 2>"$tmp/partial-up.err"; then
+  echo 'rehearsal ignored a partial Compose startup failure' >&2
+  exit 1
+fi
+grep -E 'POSTGRES_TEST_PORT=55433 docker compose -p overtime-rehearsal-test-[0-9]+ -f .*compose.test.yaml up -d --wait' "$tmp/calls.log" >/dev/null
+grep -E 'POSTGRES_TEST_PORT=55433 docker compose -p overtime-rehearsal-test-[0-9]+ -f .*compose.test.yaml down -v' "$tmp/calls.log" >/dev/null
+rm "$tmp/calls.log"
 
 PATH="$tmp/bin:$PATH" \
 DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55433/overtime_test' \
