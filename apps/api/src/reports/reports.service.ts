@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { InvalidOvertimeInputError } from '../overtime/domain/overtime.errors';
-import { buildReportCsv } from './csv';
+import { buildReportExcel } from './excel';
 import { ReportsRepository } from './reports.repository';
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -63,9 +63,9 @@ export class ReportsService {
     };
   }
 
-  async csv(query: MonthlyReportQuery): Promise<string> {
+  async excel(query: MonthlyReportQuery): Promise<Buffer> {
     const records = await this.rows(query);
-    return buildReportCsv(
+    return buildReportExcel(
       records.map((record) => ({
         workDate: record.workDate,
         name: record.user.name,

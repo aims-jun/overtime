@@ -35,7 +35,7 @@ describe('AdminPage', () => {
     )
   })
 
-  it('shows synchronized report totals, rows, and CSV filter URL', async () => {
+  it('shows synchronized report totals, rows, and Excel filter URL', async () => {
     server.use(
       http.get('/api/admin/users', () =>
         HttpResponse.json([
@@ -97,9 +97,9 @@ describe('AdminPage', () => {
     expect(within(mobileList).getByText('22:30 – 다음 날 01:00')).toBeInTheDocument()
     expect(within(mobileList).getByText('1시간')).toBeInTheDocument()
 
-    expect(screen.getByRole('link', { name: '내역 다운로드' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Excel 다운로드' })).toHaveAttribute(
       'href',
-      '/api/admin/reports.csv?month=2026-07&userId=user-1',
+      '/api/admin/reports.xlsx?month=2026-07&userId=user-1',
     )
   })
 

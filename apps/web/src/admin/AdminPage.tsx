@@ -6,7 +6,7 @@ import { Icon } from '../ui/Icon'
 import { AdminFilters } from './AdminFilters'
 import { AdminRecords } from './AdminRecords'
 import { AdminSummary } from './AdminSummary'
-import { buildCsvUrl } from './csv-download'
+import { buildExcelUrl } from './excel-download'
 
 function thisMonth(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -39,9 +39,9 @@ export function AdminPage() {
     <main className="admin-page">
       <div className="admin-title">
         <h1>업무 연장 현황</h1>
-        <a className="csv-button" href={buildCsvUrl({ month, userId })}>
+        <a className="csv-button" href={buildExcelUrl({ month, userId })}>
           <Icon name="download" size={18} />
-          내역 다운로드
+          Excel 다운로드
         </a>
       </div>
       <AdminFilters

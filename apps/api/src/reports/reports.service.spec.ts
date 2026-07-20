@@ -1,5 +1,6 @@
 import type { OvertimeRecordEntity } from '../database/entities/overtime-record.entity';
 import type { UserEntity } from '../database/entities/user.entity';
+import { Workbook } from 'exceljs';
 import { ReportsRepository } from './reports.repository';
 import { ReportsService } from './reports.service';
 
@@ -83,17 +84,23 @@ describe('ReportsService', () => {
     ]);
   });
 
-  it('applies one user filter identically to JSON and CSV', async () => {
+  it('applies one user filter identically to JSON and Excel', async () => {
     const repository = new FakeReportsRepository();
     const service = new ReportsService(repository);
 
     const query = { month: '2026-07', userId: employee.id };
     const report = await service.monthly(query);
-    const csv = await service.csv(query);
+    const excel = await service.excel(query);
+    const workbook = new Workbook();
+    await workbook.xlsx.load(excel);
+    const sheet = workbook.getWorksheet('업무연장 내역');
+    const emails = sheet
+      ?.getColumn(3)
+      .values.filter((value): value is string => typeof value === 'string');
 
     expect(report.records).toHaveLength(1);
     expect(report.totalMinutes).toBe(120);
-    expect(csv).toContain(employee.email);
-    expect(csv).not.toContain(manager.email);
+    expect(emails).toContain(employee.email);
+    expect(emails).not.toContain(manager.email);
   });
 });

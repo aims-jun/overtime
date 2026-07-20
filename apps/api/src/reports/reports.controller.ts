@@ -27,19 +27,22 @@ export class ReportsController {
     return this.reports.monthly({ month, userId });
   }
 
-  @Get('reports.csv')
-  async csv(
+  @Get('reports.xlsx')
+  async excel(
     @Query('month') month: string,
     @Query('userId') userId: string | undefined,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<string> {
+  ): Promise<Buffer> {
     const query: MonthlyReportQuery = { month, userId };
-    const csv = await this.reports.csv(query);
-    response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const excel = await this.reports.excel(query);
+    response.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="overtime-${month}.csv"`,
+      `attachment; filename="aims-overtime-${month}.xlsx"`,
     );
-    return csv;
+    return excel;
   }
 }
