@@ -54,7 +54,11 @@ export function AdminPage() {
           setParams(query)
         }}
       />
-      {report.isPending ? <div className="status-card">보고서를 불러오는 중…</div> : null}
+      {report.isPending ? (
+        <div className="status-skeleton" aria-label="불러오는 중">
+          <span /><span /><span />
+        </div>
+      ) : null}
       {report.isError ? (
         <div className="status-card error-card" role="alert">
           <p>{friendlyError(report.error)}</p>

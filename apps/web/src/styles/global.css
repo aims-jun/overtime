@@ -71,15 +71,15 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .app-dialog > header h2 { font-size: 21px; }
 
 .app-header {
-  min-height: 64px;
+  min-height: 60px;
   padding: 0 max(18px, calc((100vw - 1120px) / 2 + 28px));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
   color: var(--ink);
-  background: var(--lime);
-  border-bottom: 1px solid rgba(23, 33, 24, .16);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
 }
 .brand {
   color: var(--ink);
@@ -88,18 +88,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-weight: 900;
   letter-spacing: -.06em;
 }
-.user-menu { display: flex; align-items: center; gap: 14px; font-size: 13px; font-weight: 650; }
-.user-menu span { color: rgba(23, 33, 24, .72); }
+.user-menu { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 13px; font-weight: 650; }
+.user-menu > span { color: var(--muted); }
 .user-menu a { color: var(--ink); font-weight: 800; text-decoration: none; }
 .user-menu button, .record-actions button, .text-button, .status-card button {
   min-height: 44px;
   padding: 0 14px;
-  border: 1px solid rgba(23, 33, 24, .18);
+  border: 1px solid var(--line);
   border-radius: 10px;
   color: var(--ink);
-  background: rgba(255, 255, 255, .38);
+  background: var(--surface);
   font-weight: 750;
 }
+.user-menu button { display: inline-flex; align-items: center; gap: 7px; }
 
 .page-shell { width: min(100%, 720px); margin: 0 auto; padding: 44px 24px 96px; }
 .summary-panel {
@@ -247,6 +248,24 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   text-align: center;
   background: rgba(255, 255, 255, .45);
 }
+.status-skeleton {
+  height: 170px;
+  padding: 28px 24px;
+  display: grid;
+  align-content: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.status-skeleton span {
+  width: 100%;
+  height: 16px;
+  border-radius: 8px;
+  background: #e9ecef;
+}
+.status-skeleton span:first-child { width: 36%; height: 22px; }
+.status-skeleton span:last-child { width: 72%; }
 .empty-state > span {
   width: 40px; height: 40px; margin: 0 auto 14px;
   display: grid; place-items: center;
@@ -289,6 +308,24 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .login-status, .setup-message { margin: 12px 0 0 !important; font-size: 13px; }
 .login-card .form-error { margin-top: 14px; }
 .loading-page { color: var(--muted); }
+.loading-skeleton {
+  width: min(100%, 720px);
+  min-height: 240px;
+  padding: 32px;
+  display: grid;
+  align-content: center;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+.loading-skeleton span {
+  height: 18px;
+  border-radius: 9px;
+  background: #e9ecef;
+}
+.loading-skeleton span:first-child { width: 42%; height: 28px; }
+.loading-skeleton span:last-child { width: 68%; }
 
 .admin-page { width: min(100%, 1120px); margin: 0 auto; padding: 54px 28px 96px; }
 .admin-title { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
@@ -364,7 +401,7 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   .app-header { min-height: 58px; gap: 12px; padding-inline: 18px; }
   .brand { font-size: 20px; }
   .user-menu { gap: 7px; }
-  .user-menu span { display: none; }
+  .user-menu > span, .logout-label { display: none; }
   .user-menu button, .user-menu a { font-size: 12px; }
   .page-shell { padding: 30px 18px calc(88px + env(safe-area-inset-bottom)); }
   .summary-panel { gap: 14px; }

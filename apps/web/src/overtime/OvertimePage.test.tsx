@@ -44,6 +44,17 @@ function useRecords(records = [record]) {
 }
 
 describe('OvertimePage', () => {
+  it('shows a fixed-height skeleton while records load', () => {
+    server.use(
+      http.get('/api/overtime', () => new Promise(() => undefined)),
+    )
+
+    renderPage()
+
+    expect(screen.getByLabelText('불러오는 중')).toHaveClass('status-skeleton')
+    expect(screen.queryByText('기록을 불러오는 중…')).not.toBeInTheDocument()
+  })
+
   it('shows an empty state for a month without records', async () => {
     server.use(
       http.get('/api/overtime', () =>

@@ -115,7 +115,11 @@ export function OvertimePage() {
           </label>
         </div>
 
-        {query.isPending ? <div className="status-card">기록을 불러오는 중…</div> : null}
+        {query.isPending ? (
+          <div className="status-skeleton" aria-label="불러오는 중">
+            <span /><span /><span />
+          </div>
+        ) : null}
         {query.isError ? (
           <div className="status-card error-card" role="alert">
             <p>{friendlyError(query.error)}</p>

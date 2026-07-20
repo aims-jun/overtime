@@ -25,6 +25,19 @@ function renderPage(url = '/admin?month=2026-07&userId=user-1') {
 }
 
 describe('AdminPage', () => {
+  it('shows a fixed-height skeleton while the report loads', () => {
+    server.use(
+      http.get('/api/admin/users', () => HttpResponse.json([])),
+      http.get('/api/admin/reports', () => new Promise(() => undefined)),
+    )
+
+    renderPage('/admin?month=2026-07')
+
+    expect(screen.getByLabelText('불러오는 중')).toHaveClass('status-skeleton')
+    expect(screen.queryByText('보고서를 불러오는 중…')).not.toBeInTheDocument()
+    expect(globalStyles).toMatch(/\.status-skeleton \{[\s\S]*height: 170px;/)
+  })
+
   it('switches to wrapping mobile records before the desktop table can overflow', () => {
     expect(globalStyles).toMatch(
       /@media \(max-width: 875px\) \{[\s\S]*\.admin-records-desktop \{ display: none; \}[\s\S]*\.admin-records-mobile \{ display: block; \}/,

@@ -40,6 +40,8 @@ describe('App', () => {
       'href',
       '/',
     )
+    expect(screen.getByRole('button', { name: '로그아웃' })).toBeInTheDocument()
+    expect(screen.getByTestId('logout-icon')).toBeInTheDocument()
     expect(screen.getByText('김야근')).toBeInTheDocument()
   })
 

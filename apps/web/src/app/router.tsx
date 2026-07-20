@@ -1,12 +1,22 @@
 // oxlint-disable react/only-export-components -- route elements and router belong together
+import { cloneElement } from 'react'
 import { Link, Navigate, Outlet, createBrowserRouter } from 'react-router-dom'
 import { AdminPage } from '../admin/AdminPage'
 import { LoginPage } from '../auth/LoginPage'
 import { useAuth } from '../auth/AuthProvider'
 import { OvertimePage } from '../overtime/OvertimePage'
+import { Icon } from '../ui/Icon'
 
 function LoadingPage() {
-  return <main className="loading-page">서비스를 준비하는 중…</main>
+  return (
+    <main className="loading-page">
+      <div className="loading-skeleton" aria-label="불러오는 중">
+        <span />
+        <span />
+        <span />
+      </div>
+    </main>
+  )
 }
 
 function RoleHome() {
@@ -26,7 +36,16 @@ function ProtectedLayout() {
         <div className="user-menu">
           {user.isAdmin ? <Link to="/admin">관리자</Link> : null}
           <span>{user.name}</span>
-          <button type="button" onClick={() => void signOut()}>로그아웃</button>
+          <button
+            type="button"
+            aria-label="로그아웃"
+            onClick={() => void signOut()}
+          >
+            {cloneElement(Icon({ name: 'logout', size: 18 }), {
+              'data-testid': 'logout-icon',
+            })}
+            <span className="logout-label">로그아웃</span>
+          </button>
         </div>
       </header>
       <Outlet />
