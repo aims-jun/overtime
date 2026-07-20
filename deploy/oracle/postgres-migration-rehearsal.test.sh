@@ -41,7 +41,7 @@ EOF
 cat > "$tmp/bin/docker" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-printf 'docker %s\n' "$*" >> "$REHEARSAL_CALL_LOG"
+printf 'POSTGRES_TEST_PORT=%s docker %s\n' "${POSTGRES_TEST_PORT:-unset}" "$*" >> "$REHEARSAL_CALL_LOG"
 case " $* " in
   *' up -d --wait '*) ;;
   *' down -v '*) ;;
@@ -50,7 +50,9 @@ case " $* " in
   *' createdb '*) ;;
   *' pg_restore --exit-on-error '*) ;;
   *' dropdb --if-exists '*) ;;
-  *' psql '*"to_regclass('public.users')"*) printf '0|0\n' ;;
+  *' psql '*"to_regclass('public.users')"*) echo 'unsafe absent-table query' >&2; exit 94 ;;
+  *' psql '*"information_schema.tables"*"table_type = 'BASE TABLE'"*) printf '0\n' ;;
+  *' psql '*"information_schema.tables"*) echo 'incomplete empty-target query' >&2; exit 95 ;;
   *' psql '*"COUNT(*) FROM users"*"COUNT(*) FROM overtime_records"*"COUNT(*) FROM sessions"*) printf '2|3|0|1\n' ;;
   *' psql '*"COUNT(*) FROM users"*"COUNT(*) FROM overtime_records"*) printf '2|3\n' ;;
   *) echo "unexpected docker invocation: $*" >&2; exit 92 ;;
@@ -117,8 +119,20 @@ fi
 grep -F 'refusing PostgreSQL database without a test-only name' "$tmp/nontest.err" >/dev/null
 test ! -e "$tmp/calls.log"
 
+if PATH="$tmp/bin:$PATH" \
+  DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55434/overtime_test' \
+  REHEARSAL_POSTGRES_PORT=55433 \
+  bash "$script" "$fixture" >"$tmp/port-mismatch.out" 2>"$tmp/port-mismatch.err"; then
+  echo 'rehearsal accepted mismatched PostgreSQL URL and Compose ports' >&2
+  exit 1
+fi
+grep -F 'rehearsal PostgreSQL URL port must match REHEARSAL_POSTGRES_PORT' \
+  "$tmp/port-mismatch.err" >/dev/null
+test ! -e "$tmp/calls.log"
+
 PATH="$tmp/bin:$PATH" \
-DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55432/overtime_test' \
+DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55433/overtime_test' \
+REHEARSAL_POSTGRES_PORT=55433 \
 REHEARSAL_API_PORT=33109 \
 bash "$script" "$fixture" >"$tmp/success.out" 2>"$tmp/success.err"
 
@@ -163,7 +177,7 @@ test "$migration_line" -lt "$verification_line"
 test "$verification_line" -lt "$smoke_line"
 test "$smoke_line" -lt "$cleanup_line"
 
-grep -E 'docker compose -p overtime-rehearsal-test-[0-9]+ -f .*compose.test.yaml down -v' "$tmp/calls.log" >/dev/null
+grep -E 'POSTGRES_TEST_PORT=55433 docker compose -p overtime-rehearsal-test-[0-9]+ -f .*compose.test.yaml down -v' "$tmp/calls.log" >/dev/null
 if grep -E '/data/overtime/overtime\.sqlite|203\.0\.113\.10|person|@company\.' "$tmp/success.out" "$tmp/success.err"; then
   echo 'rehearsal output exposed a production path, host, or personal data' >&2
   exit 1

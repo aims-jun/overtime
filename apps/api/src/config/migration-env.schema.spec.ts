@@ -1,4 +1,7 @@
-import { parseMigrationEnv } from './migration-env.schema';
+import {
+  parseDatabaseMigrationEnv,
+  parseMigrationEnv,
+} from './migration-env.schema';
 
 const validMigrationEnv = {
   DATABASE_MIGRATION_URL:
@@ -7,6 +10,16 @@ const validMigrationEnv = {
 };
 
 describe('parseMigrationEnv', () => {
+  it('accepts a database-only environment for schema migrations', () => {
+    expect(
+      parseDatabaseMigrationEnv({
+        DATABASE_MIGRATION_URL: validMigrationEnv.DATABASE_MIGRATION_URL,
+      }),
+    ).toEqual({
+      DATABASE_MIGRATION_URL: validMigrationEnv.DATABASE_MIGRATION_URL,
+    });
+  });
+
   it('preserves valid migration inputs', () => {
     expect(parseMigrationEnv(validMigrationEnv)).toEqual({
       DATABASE_MIGRATION_URL:

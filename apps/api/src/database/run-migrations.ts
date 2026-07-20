@@ -1,5 +1,5 @@
 import type { Migration } from 'typeorm';
-import { parseMigrationEnv } from '../config/migration-env.schema';
+import { parseDatabaseMigrationEnv } from '../config/migration-env.schema';
 import { createMigrationDataSource } from './migration-data-source';
 
 type AppliedMigration = Pick<Migration, 'name'>;
@@ -32,7 +32,7 @@ function migrationName(migration: AppliedMigration): string {
 }
 
 async function main(): Promise<void> {
-  const { DATABASE_MIGRATION_URL } = parseMigrationEnv(process.env);
+  const { DATABASE_MIGRATION_URL } = parseDatabaseMigrationEnv(process.env);
   const appliedMigrations = await runMigrations(DATABASE_MIGRATION_URL);
   for (const name of appliedMigrations) {
     console.log(name);

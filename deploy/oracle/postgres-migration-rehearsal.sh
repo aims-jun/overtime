@@ -4,7 +4,8 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 compose_file="$root/compose.test.yaml"
 compose_project="overtime-rehearsal-test-$$"
-database_url="${DATABASE_MIGRATION_URL:-postgresql://overtime_test:overtime_test@127.0.0.1:55432/overtime_test}"
+postgres_port="${REHEARSAL_POSTGRES_PORT:-55433}"
+database_url="${DATABASE_MIGRATION_URL:-postgresql://overtime_test:overtime_test@127.0.0.1:${postgres_port}/overtime_test}"
 api_port="${REHEARSAL_API_PORT:-33109}"
 
 if [[ $# != 1 ]]; then
@@ -43,6 +44,7 @@ if [[ "$authority" == "$url_remainder" ]]; then
 fi
 host_port="${authority##*@}"
 target_host="${host_port%%:*}"
+target_port="${host_port##*:}"
 database_path="${url_remainder#*/}"
 target_database="${database_path%%\?*}"
 case "$target_host" in
@@ -51,6 +53,14 @@ case "$target_host" in
 esac
 if [[ "$target_database" != *test* && "$target_database" != *rehearsal* ]]; then
   echo 'refusing PostgreSQL database without a test-only name' >&2
+  exit 1
+fi
+if [[ ! "$postgres_port" =~ ^[0-9]+$ || "$postgres_port" -lt 1024 || "$postgres_port" -gt 65535 ]]; then
+  echo 'REHEARSAL_POSTGRES_PORT must be a non-privileged TCP port' >&2
+  exit 1
+fi
+if [[ "$target_port" != "$postgres_port" ]]; then
+  echo 'rehearsal PostgreSQL URL port must match REHEARSAL_POSTGRES_PORT' >&2
   exit 1
 fi
 if [[ ! "$api_port" =~ ^[0-9]+$ || "$api_port" -lt 1024 || "$api_port" -gt 65535 ]]; then
@@ -64,6 +74,8 @@ for command in sqlite3 sha256sum docker npm curl; do
     exit 1
   fi
 done
+
+export POSTGRES_TEST_PORT="$postgres_port"
 
 work_dir="$(mktemp -d)"
 sqlite_backup="$work_dir/source-backup.sqlite"
@@ -134,11 +146,11 @@ printf 'source_counts users=%s overtime_records=%s\n' "$source_users" "$source_r
 "${compose[@]}" up -d --wait >/dev/null
 compose_started=1
 
-empty_counts="$("${compose[@]}" exec -T postgres-test psql \
+target_table_count="$("${compose[@]}" exec -T postgres-test psql \
   --username overtime_test --dbname "$target_database" --tuples-only --no-align \
-  --command="SELECT CASE WHEN to_regclass('public.users') IS NULL THEN 0 ELSE (SELECT COUNT(*) FROM users) END || '|' || CASE WHEN to_regclass('public.overtime_records') IS NULL THEN 0 ELSE (SELECT COUNT(*) FROM overtime_records) END;" \
+  --command="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';" \
   | tr -d '[:space:]')"
-if [[ "$empty_counts" != '0|0' ]]; then
+if [[ "$target_table_count" != '0' ]]; then
   echo 'refusing non-empty rehearsal PostgreSQL target' >&2
   exit 1
 fi
@@ -185,7 +197,7 @@ printf 'second migration refused non-empty target\n'
 
 printf '7/8 API smoke and backup restore\n'
 NODE_ENV=production PORT="$api_port" \
-APP_ORIGINS='http://127.0.0.1:5173' \
+APP_ORIGINS='https://rehearsal.invalid' \
 DATABASE_URL="$database_url" \
 GOOGLE_CLIENT_ID='rehearsal.apps.googleusercontent.com' \
 GOOGLE_HOSTED_DOMAIN='example.invalid' \

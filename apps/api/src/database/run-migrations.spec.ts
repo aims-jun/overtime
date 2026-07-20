@@ -7,15 +7,17 @@ describe('runMigrations', () => {
   it('initializes, applies migrations, and destroys the data source in order', async () => {
     const calls: string[] = [];
     const fakeDataSource = {
-      initialize: jest.fn(async () => {
+      initialize: jest.fn(() => {
         calls.push('initialize');
+        return Promise.resolve();
       }),
-      runMigrations: jest.fn(async () => {
+      runMigrations: jest.fn(() => {
         calls.push('runMigrations');
-        return [{ name: 'InitialSchema1752360000000' }];
+        return Promise.resolve([{ name: 'InitialSchema1752360000000' }]);
       }),
-      destroy: jest.fn(async () => {
+      destroy: jest.fn(() => {
         calls.push('destroy');
+        return Promise.resolve();
       }),
     };
 
@@ -28,9 +30,9 @@ describe('runMigrations', () => {
   it('destroys the initialized data source when applying migrations fails', async () => {
     const migrationError = new Error('migration failed');
     const fakeDataSource = {
-      initialize: jest.fn(async () => undefined),
-      runMigrations: jest.fn(async () => Promise.reject(migrationError)),
-      destroy: jest.fn(async () => undefined),
+      initialize: jest.fn(() => Promise.resolve()),
+      runMigrations: jest.fn(() => Promise.reject(migrationError)),
+      destroy: jest.fn(() => Promise.resolve()),
     };
 
     await expect(runMigrations(databaseUrl, () => fakeDataSource)).rejects.toBe(
