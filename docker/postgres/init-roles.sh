@@ -15,6 +15,8 @@ psql \
   --set="migrator_password=$POSTGRES_MIGRATION_PASSWORD" \
   --set="runtime_password=$POSTGRES_RUNTIME_PASSWORD" \
   --set="backup_password=$POSTGRES_BACKUP_PASSWORD" <<'SQL'
+BEGIN;
+
 CREATE ROLE overtime_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
   PASSWORD :'migrator_password';
 CREATE ROLE overtime_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
@@ -33,4 +35,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO overtime_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public
   GRANT SELECT ON TABLES TO overtime_backup;
+
+COMMIT;
 SQL
