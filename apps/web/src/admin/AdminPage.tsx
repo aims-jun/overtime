@@ -2,9 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { api, friendlyError } from '../api/http'
 import type { AdminReport, AdminUser } from '../api/types'
+import { Icon } from '../ui/Icon'
 import { AdminFilters } from './AdminFilters'
+import { AdminRecords } from './AdminRecords'
 import { AdminSummary } from './AdminSummary'
-import { AdminTable } from './AdminTable'
 import { buildCsvUrl } from './csv-download'
 
 function thisMonth(): string {
@@ -37,8 +38,11 @@ export function AdminPage() {
   return (
     <main className="admin-page">
       <div className="admin-title">
-        <div><span className="eyebrow">AIMS ADMIN</span><h1>업무 연장 현황</h1></div>
-        <a className="csv-button" href={buildCsvUrl({ month, userId })}>내역 다운로드</a>
+        <h1>업무 연장 현황</h1>
+        <a className="csv-button" href={buildCsvUrl({ month, userId })}>
+          <Icon name="download" size={18} />
+          내역 다운로드
+        </a>
       </div>
       <AdminFilters
         month={month}
@@ -58,7 +62,7 @@ export function AdminPage() {
         </div>
       ) : null}
       {report.data ? (
-        <><AdminSummary report={report.data} /><AdminTable records={report.data.records} /></>
+        <><AdminSummary report={report.data} /><AdminRecords records={report.data.records} /></>
       ) : null}
     </main>
   )

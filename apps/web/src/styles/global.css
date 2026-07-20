@@ -291,9 +291,9 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .loading-page { color: var(--muted); }
 
 .admin-page { width: min(100%, 1120px); margin: 0 auto; padding: 54px 28px 96px; }
-.admin-title { margin-bottom: 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
-.admin-title h1 { margin-top: 8px; font-size: clamp(38px, 5vw, 58px); }
-.csv-button { min-width: 150px; padding: 0 20px; display: grid; place-items: center; text-decoration: none; }
+.admin-title { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.admin-title h1 { font-size: clamp(32px, 4vw, 42px); }
+.csv-button { min-width: 150px; padding: 0 20px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
 .admin-filters {
   margin-bottom: 22px;
   padding: 20px;
@@ -314,25 +314,31 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   border-radius: 18px;
   background: var(--line);
 }
-.admin-summary > div, .person-totals { margin: 0; padding: 22px; background: var(--surface); }
+.admin-summary > div { margin: 0; padding: 22px; background: var(--surface); }
 .admin-summary span { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
 .admin-summary strong { font-size: 27px; letter-spacing: -.04em; }
-.admin-summary small { margin-left: 8px; color: var(--muted); }
 .summary-total { color: #f6ffe3; background: var(--ink) !important; }
 .summary-total span { color: #c5d2c2; }
-.summary-total small { color: var(--lime); }
-.person-totals { list-style: none; }
+.person-totals { margin: 0; padding: 0; list-style: none; }
 .person-totals li { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .person-totals li + li { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .person-totals li span { margin: 0; color: var(--ink); }
 .person-totals li strong { font-size: 14px; }
-.table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.admin-records-desktop { overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.admin-records-mobile { display: none; }
 .admin-table { width: 100%; min-width: 820px; border-collapse: collapse; text-align: left; }
 .admin-table th { padding: 14px 16px; color: #4f594f; background: #eef0ea; font-size: 11px; letter-spacing: .04em; }
 .admin-table td { padding: 17px 16px; border-top: 1px solid var(--line); font-size: 13px; vertical-align: top; }
 .admin-table td:nth-child(1), .admin-table td:nth-child(3), .admin-table td:nth-child(4) { white-space: nowrap; }
 .admin-table td strong, .admin-table td small { display: block; }
 .admin-table td small { margin-top: 3px; color: var(--muted); }
+.admin-records-mobile ul { margin: 0; padding: 0; display: grid; gap: 12px; list-style: none; }
+.admin-mobile-person strong, .admin-mobile-person small { display: block; }
+.admin-mobile-person small { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.admin-mobile-card time { color: var(--muted); font-size: 12px; }
+.admin-mobile-reason { margin: 8px 0 0; font-weight: 750; }
+.admin-mobile-duration { align-self: end; font-size: 15px; }
+.admin-mobile-time { color: var(--muted); font-size: 12px; }
 .access-denied { min-height: calc(100vh - 64px); padding: 24px; display: grid; align-content: center; justify-items: center; text-align: center; }
 .access-denied h1 { margin-top: 10px; font-size: 36px; }
 .access-denied p { color: var(--muted); }
@@ -385,7 +391,11 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   .csv-button { min-width: 0; min-height: 46px; padding: 0 13px; font-size: 12px; }
   .admin-filters { grid-template-columns: 1fr; padding: 17px; }
   .admin-summary { grid-template-columns: 1fr 1fr; }
-  .person-totals { grid-column: 1 / -1; }
+  .summary-people { grid-column: 1 / -1; }
+  .admin-records-desktop { display: none; }
+  .admin-records-mobile { display: block; }
+  .admin-mobile-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 18px; border-radius: 16px; background: var(--surface); }
+  .admin-mobile-time { grid-column: 1 / -1; }
 }
 
 @media (max-width: 359px) {

@@ -9,7 +9,7 @@ type Props = {
 
 export function AdminFilters({ month, userId, users, onChange }: Props) {
   return (
-    <div className="admin-filters" aria-label="보고서 필터">
+    <section className="admin-filters" aria-label="보고서 필터">
       <label className="field">
         <span>조회 월</span>
         <input
@@ -32,6 +32,6 @@ export function AdminFilters({ month, userId, users, onChange }: Props) {
           ))}
         </select>
       </label>
-    </div>
+    </section>
   )
 }

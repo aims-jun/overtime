@@ -7,20 +7,22 @@ export function AdminSummary({ report }: { report: AdminReport }) {
       <div className="summary-total" aria-label="전체 업무 연장 합계">
         <span>전체 업무 연장</span>
         <strong>{formatMinutes(report.totalMinutes)}</strong>
-        <small>TOTAL EXTENDED</small>
+      </div>
+      <div className="summary-count">
+        <span>등록 건수</span>
+        <strong>{report.records.length}건</strong>
       </div>
       <div className="summary-people">
-        <span>기록 인원</span>
-        <strong>{report.totalsByUser.length}명</strong>
+        <span>직원별 합계</span>
+        <ul className="person-totals">
+          {report.totalsByUser.map(({ user, totalMinutes }) => (
+            <li key={user.id}>
+              <span>{user.name}</span>
+              <strong>{formatMinutes(totalMinutes)}</strong>
+            </li>
+          ))}
+        </ul>
       </div>
-      <ul className="person-totals">
-        {report.totalsByUser.map(({ user, totalMinutes }) => (
-          <li key={user.id}>
-            <span>{user.name}</span>
-            <strong>{formatMinutes(totalMinutes)}</strong>
-          </li>
-        ))}
-      </ul>
     </section>
   )
 }
