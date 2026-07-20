@@ -41,7 +41,9 @@ case " $* " in
     [[ "${FAIL_CHECK:-}" != report ]]
     printf '3|180\n'
     ;;
-  *' dropdb --if-exists '*) ;;
+  *' dropdb --if-exists '*)
+    [[ "${FAIL_DROPDB:-0}" != 1 ]]
+    ;;
   *)
     echo "unexpected docker invocation: $*" >&2
     exit 91
@@ -65,6 +67,8 @@ run_id=$run_id
 remote_dump_key=postgres/overtime-$timestamp-$run_id.dump
 remote_checksum_key=postgres/overtime-$timestamp-$run_id.dump.sha256
 remote_metadata_key=postgres/overtime-$timestamp-$run_id.metadata
+users_count=2
+overtime_records_count=3
 EOF
 }
 
@@ -125,6 +129,29 @@ test "$(grep -c ' createdb ' "$tmp/docker.log" || true)" = 0
 test "$(grep -c ' dropdb ' "$tmp/docker.log" || true)" = 0
 (cd "$tmp/backups" && sha256sum overtime-20260720T000000Z.dump > overtime-20260720T000000Z.dump.sha256)
 
+# Checksum filenames are compared literally, so regex metacharacters cannot alias the dump.
+cp "$tmp/backups/overtime-20260720T000000Z.dump.sha256" "$tmp/canonical.sha256"
+printf 'alternate payload\n' > "$tmp/backups/overtime-20260720T000000ZXdump"
+(cd "$tmp/backups" && sha256sum overtime-20260720T000000ZXdump > overtime-20260720T000000Z.dump.sha256)
+: > "$tmp/docker.log"
+if run_drill RESTORE_DATABASE=overtime_restore_drill_202607200007 >"$tmp/literal.out" 2>"$tmp/literal.err"; then
+  echo 'restore drill unexpectedly accepted a non-literal checksum filename' >&2
+  exit 1
+fi
+test "$(grep -c ' createdb ' "$tmp/docker.log" || true)" = 0
+mv "$tmp/canonical.sha256" "$tmp/backups/overtime-20260720T000000Z.dump.sha256"
+
+# Scheduled drills require numeric source-count baselines in committed metadata.
+cp "$tmp/backups/overtime-20260720T000000Z.metadata" "$tmp/counts.metadata"
+sed '/^users_count=/d' "$tmp/counts.metadata" > "$tmp/backups/overtime-20260720T000000Z.metadata"
+: > "$tmp/docker.log"
+if run_drill RESTORE_DATABASE=overtime_restore_drill_202607200008 >"$tmp/missing-count.out" 2>"$tmp/missing-count.err"; then
+  echo 'restore drill unexpectedly accepted metadata without source counts' >&2
+  exit 1
+fi
+test "$(grep -c ' createdb ' "$tmp/docker.log" || true)" = 0
+mv "$tmp/counts.metadata" "$tmp/backups/overtime-20260720T000000Z.metadata"
+
 : > "$tmp/docker.log"
 if run_drill RESTORE_DATABASE=overtime_restore_drill_202607200003 FAIL_ARCHIVE_LIST=1 >"$tmp/list.out" 2>"$tmp/list.err"; then
   echo 'restore drill unexpectedly accepted an invalid archive' >&2
@@ -177,5 +204,32 @@ if run_drill RESTORE_DATABASE=overtime_restore_drill_202607200006 \
   exit 1
 fi
 grep ' dropdb --if-exists .*overtime_restore_drill_202607200006' "$tmp/docker.log" >/dev/null
+
+# Restored counts must exactly match the committed source baseline.
+sed 's/^users_count=2$/users_count=9/' \
+  "$tmp/backups/overtime-20260720T000000Z.metadata" > "$tmp/count-mismatch.metadata"
+mv "$tmp/count-mismatch.metadata" "$tmp/backups/overtime-20260720T000000Z.metadata"
+: > "$tmp/docker.log"
+if run_drill RESTORE_DATABASE=overtime_restore_drill_202607200009 >"$tmp/count-mismatch.out" 2>"$tmp/count-mismatch.err"; then
+  echo 'restore drill unexpectedly accepted restored count mismatch' >&2
+  exit 1
+fi
+grep ' dropdb --if-exists .*overtime_restore_drill_202607200009' "$tmp/docker.log" >/dev/null
+sed 's/^users_count=9$/users_count=2/' \
+  "$tmp/backups/overtime-20260720T000000Z.metadata" > "$tmp/count-match.metadata"
+mv "$tmp/count-match.metadata" "$tmp/backups/overtime-20260720T000000Z.metadata"
+
+# Cleanup failure is surfaced, and the attempted target remains temporary only.
+: > "$tmp/docker.log"
+if run_drill RESTORE_DATABASE=overtime_restore_drill_202607200010 FAIL_DROPDB=1 >"$tmp/drop.out" 2>"$tmp/drop.err"; then
+  echo 'restore drill swallowed dropdb cleanup failure' >&2
+  exit 1
+fi
+test "$(grep -c ' dropdb --if-exists ' "$tmp/docker.log")" = 1
+grep ' dropdb --if-exists .*overtime_restore_drill_202607200010' "$tmp/docker.log" >/dev/null
+if grep -E 'dropdb .*([ =]|^)overtime([ $]|$)' "$tmp/docker.log"; then
+  echo 'restore drill targeted production during failed cleanup' >&2
+  exit 1
+fi
 
 echo 'PostgreSQL restore drill safety contract passed'

@@ -87,11 +87,17 @@ run_id="$(metadata_value run_id "$metadata")"
 remote_dump_key="$(metadata_value remote_dump_key "$metadata")"
 remote_checksum_key="$(metadata_value remote_checksum_key "$metadata")"
 remote_metadata_key="$(metadata_value remote_metadata_key "$metadata")"
+metadata_users="$(metadata_value users_count "$metadata")"
+metadata_records="$(metadata_value overtime_records_count "$metadata")"
 
 if [[ ! "$timestamp" =~ ^[0-9]{8}T[0-9]{6}Z$ ||
       ! "$run_id" =~ ^[0-9a-f]{16}$ ||
       "$archive_name" != "overtime-$timestamp.dump" ]]; then
   echo 'backup metadata has an invalid timestamp, run ID, or archive reference' >&2
+  exit 1
+fi
+if [[ ! "$metadata_users" =~ ^[0-9]+$ || ! "$metadata_records" =~ ^[0-9]+$ ]]; then
+  echo 'backup metadata has invalid source counts' >&2
   exit 1
 fi
 remote_prefix="postgres/overtime-$timestamp-$run_id"
@@ -129,7 +135,13 @@ if [[ ! -f "$archive" || ! -f "$checksum" ]]; then
 fi
 
 checksum_line="$(cat "$checksum")"
-if [[ ! "$checksum_line" =~ ^[0-9a-f]{64}[[:space:]][[:space:]]${archive_name}$ ]]; then
+checksum_hash=''
+checksum_filename=''
+checksum_extra=''
+read -r checksum_hash checksum_filename checksum_extra <<< "$checksum_line"
+if [[ ! "$checksum_hash" =~ ^[0-9a-f]{64}$ ||
+      "$checksum_filename" != "$archive_name" ||
+      -n "$checksum_extra" ]]; then
   echo 'backup checksum does not reference the exact marker archive' >&2
   exit 1
 fi
@@ -167,16 +179,9 @@ if [[ ! "$counts" =~ ^[0-9]+\|[0-9]+$ ]]; then
   echo 'restore drill could not read users/overtime_records archive counts' >&2
   exit 1
 fi
-metadata_users="$(sed -n 's/^users_count=//p' "$metadata")"
-metadata_records="$(sed -n 's/^overtime_records_count=//p' "$metadata")"
-expected_users="${EXPECTED_USERS_COUNT:-$metadata_users}"
-expected_records="${EXPECTED_OVERTIME_RECORDS_COUNT:-$metadata_records}"
-if [[ -n "$expected_users" || -n "$expected_records" ]]; then
-  if [[ ! "$expected_users" =~ ^[0-9]+$ || ! "$expected_records" =~ ^[0-9]+$ ||
-        "$counts" != "$expected_users|$expected_records" ]]; then
-    echo 'restore drill archive counts do not match expected counts' >&2
-    exit 1
-  fi
+if [[ "$counts" != "$metadata_users|$metadata_records" ]]; then
+  echo 'restore drill archive counts do not match metadata baseline' >&2
+  exit 1
 fi
 
 orphan_count="$("${compose[@]}" exec -T postgres sh -c \

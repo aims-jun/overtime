@@ -23,6 +23,9 @@ case " $* " in
   *' psql '*"SELECT current_setting('server_version')"*)
     printf '17.10 (Debian 17.10-1.pgdg120+1)\n'
     ;;
+  *' psql '*COUNT*users*overtime_records*)
+    printf '%s\n' "${SOURCE_COUNTS:-2|3}"
+    ;;
   *)
     echo "unexpected docker invocation" >&2
     exit 99
@@ -198,6 +201,14 @@ grep -Fx 'run_id=0123456789abcdef' "$metadata" >/dev/null
 grep -Fx 'remote_dump_key=postgres/overtime-20260720T000000Z-0123456789abcdef.dump' "$metadata" >/dev/null
 grep -Fx 'remote_checksum_key=postgres/overtime-20260720T000000Z-0123456789abcdef.dump.sha256' "$metadata" >/dev/null
 grep -Fx 'remote_metadata_key=postgres/overtime-20260720T000000Z-0123456789abcdef.metadata' "$metadata" >/dev/null
+grep -Fx 'users_count=2' "$metadata" >/dev/null
+grep -Fx 'overtime_records_count=3' "$metadata" >/dev/null
+
+first_count_line="$(grep -n ' psql .*COUNT.*users.*overtime_records' "$tmp/docker.log" | head -1 | cut -d: -f1)"
+dump_line="$(grep -n ' pg_dump ' "$tmp/docker.log" | cut -d: -f1)"
+last_count_line="$(grep -n ' psql .*COUNT.*users.*overtime_records' "$tmp/docker.log" | tail -1 | cut -d: -f1)"
+test "$first_count_line" -lt "$dump_line"
+test "$dump_line" -lt "$last_count_line"
 
 test "$(grep -c '^os object head ' "$tmp/oci.log")" = 3
 test "$(grep -c '^os object put ' "$tmp/oci.log")" = 3
