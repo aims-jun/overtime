@@ -1,10 +1,15 @@
+/// <reference types="node" />
+
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
 import { HttpResponse, http } from 'msw'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
 import { AdminPage } from './AdminPage'
+
+const globalStyles = readFileSync('src/styles/global.css', 'utf8')
 
 function renderPage(url = '/admin?month=2026-07&userId=user-1') {
   const client = new QueryClient({
@@ -20,6 +25,16 @@ function renderPage(url = '/admin?month=2026-07&userId=user-1') {
 }
 
 describe('AdminPage', () => {
+  it('switches to wrapping mobile records before the desktop table can overflow', () => {
+    expect(globalStyles).toMatch(
+      /@media \(max-width: 875px\) \{[\s\S]*\.admin-records-desktop \{ display: none; \}[\s\S]*\.admin-records-mobile \{ display: block; \}/,
+    )
+    expect(globalStyles).toContain('.admin-mobile-card > * { min-width: 0; }')
+    expect(globalStyles).toContain(
+      '.admin-mobile-person small, .admin-mobile-reason { overflow-wrap: anywhere; }',
+    )
+  })
+
   it('shows synchronized report totals, rows, and CSV filter URL', async () => {
     server.use(
       http.get('/api/admin/users', () =>

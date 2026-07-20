@@ -335,6 +335,8 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .admin-records-mobile ul { margin: 0; padding: 0; display: grid; gap: 12px; list-style: none; }
 .admin-mobile-person strong, .admin-mobile-person small { display: block; }
 .admin-mobile-person small { margin-top: 4px; color: var(--muted); font-size: 11px; }
+.admin-mobile-card > * { min-width: 0; }
+.admin-mobile-person small, .admin-mobile-reason { overflow-wrap: anywhere; }
 .admin-mobile-card time { color: var(--muted); font-size: 12px; }
 .admin-mobile-reason { margin: 8px 0 0; font-weight: 750; }
 .admin-mobile-duration { align-self: end; font-size: 15px; }
@@ -343,6 +345,13 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .access-denied h1 { margin-top: 10px; font-size: 36px; }
 .access-denied p { color: var(--muted); }
 .access-denied a { margin-top: 10px; color: var(--ink); font-weight: 800; }
+
+@media (max-width: 875px) {
+  .admin-records-desktop { display: none; }
+  .admin-records-mobile { display: block; }
+  .admin-mobile-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 18px; border-radius: 16px; background: var(--surface); }
+  .admin-mobile-time { grid-column: 1 / -1; }
+}
 
 @media (max-width: 767px) {
   .app-dialog {
@@ -392,10 +401,6 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   .admin-filters { grid-template-columns: 1fr; padding: 17px; }
   .admin-summary { grid-template-columns: 1fr 1fr; }
   .summary-people { grid-column: 1 / -1; }
-  .admin-records-desktop { display: none; }
-  .admin-records-mobile { display: block; }
-  .admin-mobile-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; padding: 18px; border-radius: 16px; background: var(--surface); }
-  .admin-mobile-time { grid-column: 1 / -1; }
 }
 
 @media (max-width: 359px) {
