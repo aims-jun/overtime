@@ -71,6 +71,15 @@ const record = {
 }
 
 describe('OvertimeForm', () => {
+  it('contains the native work date input inside its field on mobile', () => {
+    render(<OvertimeForm onSaved={vi.fn()} />)
+
+    expect(screen.getByLabelText('근무 날짜')).toHaveClass('work-date-input')
+    expect(globalStyles).toMatch(
+      /\.work-date-input \{[\s\S]*display: block;[\s\S]*inline-size: 100%;[\s\S]*min-inline-size: 0;[\s\S]*max-inline-size: 100%;[\s\S]*overflow: hidden;[\s\S]*\}/,
+    )
+  })
+
   it('allows native form controls and the mobile dialog to shrink to the viewport', () => {
     expect(globalStyles).toContain(
       '.record-form > *, .time-fields > * { min-width: 0; max-width: 100%; }',

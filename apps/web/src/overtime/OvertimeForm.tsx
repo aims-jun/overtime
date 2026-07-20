@@ -83,6 +83,7 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
       <label className="field field-wide">
         <span>근무 날짜</span>
         <input
+          className="work-date-input"
           type="date"
           value={values.workDate}
           onChange={(event) => update('workDate', event.target.value)}
