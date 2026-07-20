@@ -106,6 +106,15 @@ describe('OvertimeForm', () => {
     )
   })
 
+  it('rotates only the arrow icon when time fields stack', () => {
+    expect(globalStyles).toMatch(
+      /@media \(max-width: 359px\) \{[\s\S]*\.time-arrow \{[^}]*width: 100%;[^}]*height: 18px;[^}]*\}[\s\S]*\.time-arrow svg \{ transform: rotate\(90deg\); \}/,
+    )
+    expect(globalStyles).not.toMatch(
+      /@media \(max-width: 359px\) \{[\s\S]*\.time-arrow \{[^}]*transform:/,
+    )
+  })
+
   it('allows native form controls and the mobile dialog to shrink to the viewport', () => {
     expect(globalStyles).toContain(
       '.record-form > *, .time-fields > * { min-width: 0; max-width: 100%; }',

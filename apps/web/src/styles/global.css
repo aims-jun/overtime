@@ -632,7 +632,8 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   .summary-panel { grid-template-columns: 1fr; }
   .monthly-total { width: 100%; }
   .time-fields { grid-template-columns: 1fr; }
-  .time-arrow { width: 100%; height: 18px; align-self: center; transform: rotate(90deg); }
+  .time-arrow { width: 100%; height: 18px; align-self: center; }
+  .time-arrow svg { transform: rotate(90deg); }
   .admin-title { flex-direction: column; }
   .csv-button { width: 100%; }
 }
