@@ -26,6 +26,7 @@ docker run --detach --rm \
   --env POSTGRES_DB=overtime \
   --env POSTGRES_USER=postgres \
   --env POSTGRES_PASSWORD="$admin_password" \
+  --env POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 \
   --env POSTGRES_MIGRATION_PASSWORD="$migration_password" \
   --env POSTGRES_RUNTIME_PASSWORD="$runtime_password" \
   --env POSTGRES_BACKUP_PASSWORD="$backup_password" \
@@ -49,10 +50,19 @@ for secret in "$admin_password" "$migration_password" "$runtime_password" "$back
   fi
 done
 
+if docker exec \
+  --env PGPASSWORD=definitely-wrong-password \
+  "$container" \
+  psql --host=127.0.0.1 --username overtime_migrator --dbname overtime \
+  --command='SELECT 1;' >/dev/null 2>&1; then
+  echo 'migration role unexpectedly authenticated with the wrong password' >&2
+  exit 1
+fi
+
 docker exec --interactive \
   --env PGPASSWORD="$migration_password" \
   "$container" \
-  psql --set=ON_ERROR_STOP=1 --username overtime_migrator --dbname overtime <<'SQL' >/dev/null
+  psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_migrator --dbname overtime <<'SQL' >/dev/null
 CREATE TABLE privilege_probe (id integer PRIMARY KEY, value text NOT NULL);
 INSERT INTO privilege_probe VALUES (1, 'seed');
 SQL
@@ -60,7 +70,7 @@ SQL
 docker exec --interactive \
   --env PGPASSWORD="$runtime_password" \
   "$container" \
-  psql --set=ON_ERROR_STOP=1 --username overtime_app --dbname overtime <<'SQL' >/dev/null
+  psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_app --dbname overtime <<'SQL' >/dev/null
 SELECT * FROM privilege_probe;
 INSERT INTO privilege_probe VALUES (2, 'runtime');
 UPDATE privilege_probe SET value = 'updated' WHERE id = 2;
@@ -70,7 +80,7 @@ SQL
 if docker exec \
   --env PGPASSWORD="$runtime_password" \
   "$container" \
-  psql --set=ON_ERROR_STOP=1 --username overtime_app --dbname overtime \
+  psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_app --dbname overtime \
   --command='CREATE TABLE runtime_must_not_create (id integer);' >/dev/null 2>&1; then
   echo 'runtime role unexpectedly created a table' >&2
   exit 1
@@ -79,13 +89,13 @@ fi
 docker exec \
   --env PGPASSWORD="$backup_password" \
   "$container" \
-  psql --set=ON_ERROR_STOP=1 --username overtime_backup --dbname overtime \
+  psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_backup --dbname overtime \
   --command='SELECT * FROM privilege_probe;' >/dev/null
 
 if docker exec \
   --env PGPASSWORD="$backup_password" \
   "$container" \
-  psql --set=ON_ERROR_STOP=1 --username overtime_backup --dbname overtime \
+  psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_backup --dbname overtime \
   --command="INSERT INTO privilege_probe VALUES (3, 'forbidden');" >/dev/null 2>&1; then
   echo 'backup role unexpectedly inserted a row' >&2
   exit 1
