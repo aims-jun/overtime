@@ -6,6 +6,8 @@ export type IconName =
   | 'edit'
   | 'trash'
   | 'calendar'
+  | 'chevron-left'
+  | 'chevron-right'
   | 'chevron-down'
   | 'download'
   | 'logout'
@@ -44,6 +46,8 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
         <path d="M16 3v4M8 3v4M3 10h18" />
       </>
     ),
+    'chevron-left': <path d="m15 18-6-6 6-6" />,
+    'chevron-right': <path d="m9 18 6-6-6-6" />,
     'chevron-down': <path d="m6 9 6 6 6-6" />,
     download: (
       <>

@@ -4,6 +4,7 @@ import { api, friendlyError } from '../api/http'
 import type { MonthlyOvertime, OvertimeRecord } from '../api/types'
 import { Dialog } from '../ui/Dialog'
 import { Icon } from '../ui/Icon'
+import { MonthPicker } from '../ui/MonthPicker'
 import { OvertimeEditorDialog } from './OvertimeEditorDialog'
 import { formatMinutes } from './time-preview'
 import { OvertimeList } from './OvertimeList'
@@ -97,14 +98,7 @@ export function OvertimePage() {
             <span className="eyebrow">업무 기록</span>
             <h2>최근 내역</h2>
           </div>
-          <label className="month-picker">
-            <span className="sr-only">조회 월</span>
-            <input
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-            />
-          </label>
+          <MonthPicker label="조회 월" value={month} onChange={setMonth} />
         </div>
 
         {query.isPending ? (

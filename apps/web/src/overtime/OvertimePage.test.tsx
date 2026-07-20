@@ -1,10 +1,13 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HttpResponse, http } from 'msw'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { server } from '../test/server'
 import { OvertimePage } from './OvertimePage'
+
+const globalStyles = readFileSync('src/styles/global.css', 'utf8')
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -44,6 +47,15 @@ function useRecords(records = [record]) {
 }
 
 describe('OvertimePage', () => {
+  it('stacks the month trigger at full width on mobile', () => {
+    expect(globalStyles).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.history-heading \{[\s\S]*flex-direction: column;[\s\S]*align-items: stretch;/,
+    )
+    expect(globalStyles).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.month-picker,[\s\S]*\.month-picker-trigger \{ width: 100%; \}/,
+    )
+  })
+
   it('shows a fixed-height skeleton while records load', () => {
     server.use(
       http.get('/api/overtime', () => new Promise(() => undefined)),
@@ -98,12 +110,12 @@ describe('OvertimePage', () => {
         })
       }),
     )
+    const user = userEvent.setup()
     renderPage()
 
     expect(await screen.findByText('배포 대응')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('조회 월'), {
-      target: { value: '2026-06' },
-    })
+    await user.click(screen.getByRole('button', { name: '조회 월' }))
+    await user.click(screen.getByRole('button', { name: '2026년 6월 선택' }))
 
     expect(screen.getByText('배포 대응')).toBeInTheDocument()
     expect(
