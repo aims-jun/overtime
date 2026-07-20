@@ -31,7 +31,7 @@ export function AdminRecords({ records }: { records: AdminOvertimeRecord[] }) {
             {records.map((record) => (
               <tr key={record.id}>
                 <td>{record.workDate}</td>
-                <td><strong>{record.user.name}</strong><small>{record.user.email}</small></td>
+                <td><strong className="admin-person-name">{record.user.name}</strong><small>{record.user.email}</small></td>
                 <td>{formatTime(record)}</td>
                 <td>{formatMinutes(record.durationMinutes)}</td>
                 <td>{record.reason}</td>
@@ -45,7 +45,7 @@ export function AdminRecords({ records }: { records: AdminOvertimeRecord[] }) {
           {records.map((record) => (
             <li className="admin-mobile-card" key={record.id}>
               <div className="admin-mobile-person">
-                <strong>{record.user.name}</strong>
+                <strong className="admin-person-name">{record.user.name}</strong>
                 <small>{record.user.email}</small>
               </div>
               <time dateTime={record.workDate}>{record.workDate}</time>

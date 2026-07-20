@@ -1,4 +1,5 @@
 import type { AdminUser } from '../api/types'
+import { MonthPicker } from '../ui/MonthPicker'
 
 type Props = {
   month: string
@@ -10,14 +11,14 @@ type Props = {
 export function AdminFilters({ month, userId, users, onChange }: Props) {
   return (
     <section className="admin-filters" aria-label="보고서 필터">
-      <label className="field">
+      <div className="field admin-month-field">
         <span>조회 월</span>
-        <input
-          type="month"
+        <MonthPicker
+          label="조회 월"
           value={month}
-          onChange={(event) => onChange({ month: event.target.value, userId })}
+          onChange={(nextMonth) => onChange({ month: nextMonth, userId })}
         />
-      </label>
+      </div>
       <label className="field">
         <span>직원</span>
         <select

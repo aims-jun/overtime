@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { readFileSync } from 'node:fs'
 import { HttpResponse, http } from 'msw'
@@ -140,12 +140,14 @@ describe('AdminPage', () => {
         })
       }),
     )
+    const user = userEvent.setup()
     renderPage('/admin?month=2026-07')
 
     expect((await screen.findAllByText('배포 대응')).length).toBeGreaterThan(0)
-    fireEvent.change(screen.getByLabelText('조회 월'), {
-      target: { value: '2026-06' },
-    })
+    await user.click(screen.getByRole('button', { name: '조회 월' }))
+    await user.click(
+      screen.getByRole('button', { name: '2026년 6월 선택' }),
+    )
 
     expect(screen.getAllByText('배포 대응').length).toBeGreaterThan(0)
     expect(screen.getByRole('status', { name: '보고서를 새로 불러오는 중' }))
@@ -181,6 +183,15 @@ describe('AdminPage', () => {
   it('uses the light lime treatment for the primary admin total', () => {
     expect(globalStyles).toMatch(
       /\.summary-total \{[^}]*color: var\(--ink\);[^}]*background: var\(--lime-soft\) !important;/,
+    )
+  })
+
+  it('uses readable employee name hierarchy in every admin view', () => {
+    expect(globalStyles).toMatch(
+      /\.person-name \{[^}]*font-size: 15px;[^}]*font-weight: 800;/,
+    )
+    expect(globalStyles).toMatch(
+      /\.admin-person-name \{[^}]*font-size: 15px;[^}]*font-weight: 800;/,
     )
   })
 

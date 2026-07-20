@@ -17,7 +17,7 @@ export function AdminSummary({ report }: { report: AdminReport }) {
         <ul className="person-totals">
           {report.totalsByUser.map(({ user, totalMinutes }) => (
             <li key={user.id}>
-              <span>{user.name}</span>
+              <span className="person-name">{user.name}</span>
               <strong>{formatMinutes(totalMinutes)}</strong>
             </li>
           ))}
