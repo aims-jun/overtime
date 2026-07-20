@@ -1,21 +1,63 @@
 name: overtime-tracker
 
 services:
+  postgres:
+    image: postgres:17.10-bookworm
+    environment:
+      POSTGRES_DB: overtime
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      POSTGRES_RUNTIME_PASSWORD: ${POSTGRES_RUNTIME_PASSWORD}
+      POSTGRES_MIGRATION_PASSWORD: ${POSTGRES_MIGRATION_PASSWORD}
+      POSTGRES_BACKUP_PASSWORD: ${POSTGRES_BACKUP_PASSWORD}
+    command:
+      - postgres
+      - -c
+      - max_connections=20
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - work_mem=1MB
+      - -c
+      - maintenance_work_mem=32MB
+    volumes:
+      - ${POSTGRES_DATA_DIR:-/data/postgres}:/var/lib/postgresql/data
+      - ./docker/postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-init-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d overtime"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    mem_limit: 384m
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+    restart: unless-stopped
+    logging:
+      options: { max-size: "10m", max-file: "3" }
+
   api:
     image: ${API_IMAGE:-overtime-api}
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    env_file:
-      - path: .env.production
-        required: false
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_PATH: /app/data/overtime.sqlite
+      APP_ORIGINS: ${APP_ORIGINS}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_HOSTED_DOMAIN: ${GOOGLE_HOSTED_DOMAIN}
+      ADMIN_EMAILS: ${ADMIN_EMAILS}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-overtime_session}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-7}
+      SESSION_HASH_SECRET: ${SESSION_HASH_SECRET}
+      DATABASE_URL: ${DATABASE_URL}
     user: "10001:10001"
-    volumes:
-      - ${OVERTIME_DATA_DIR:-/data/overtime}:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s

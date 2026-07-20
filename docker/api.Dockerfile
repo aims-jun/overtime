@@ -21,7 +21,6 @@ COPY --from=dependencies /workspace/node_modules ./node_modules
 COPY --from=build /workspace/apps/api/dist ./dist
 COPY apps/api/package.json ./package.json
 RUN useradd --system --uid 10001 --create-home app \
-  && mkdir -p /app/data \
   && chown -R app:app /app
 USER app
 EXPOSE 3000
