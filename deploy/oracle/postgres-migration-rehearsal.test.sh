@@ -116,6 +116,16 @@ grep -F 'refusing nonlocal PostgreSQL target' "$tmp/remote.err" >/dev/null
 test ! -e "$tmp/calls.log"
 
 if PATH="$tmp/bin:$PATH" \
+  DATABASE_MIGRATION_URL='postgresql://test:test@localhost:55433/overtime_test' \
+  REHEARSAL_POSTGRES_PORT=55433 \
+  bash "$script" "$fixture" >"$tmp/localhost.out" 2>"$tmp/localhost.err"; then
+  echo 'rehearsal accepted a DNS-resolved localhost target' >&2
+  exit 1
+fi
+grep -F 'refusing nonlocal PostgreSQL target' "$tmp/localhost.err" >/dev/null
+test ! -e "$tmp/calls.log"
+
+if PATH="$tmp/bin:$PATH" \
   DATABASE_MIGRATION_URL='postgresql://test:test@127.0.0.1:55433/overtime_test?host=203.0.113.10&port=5432' \
   REHEARSAL_POSTGRES_PORT=55433 \
   bash "$script" "$fixture" >"$tmp/query-override.out" 2>"$tmp/query-override.err"; then

@@ -52,7 +52,7 @@ target_port="${host_port##*:}"
 database_path="${url_remainder#*/}"
 target_database="${database_path%%\?*}"
 case "$target_host" in
-  127.0.0.1|localhost|postgres-test) ;;
+  127.0.0.1|postgres-test) ;;
   *) echo 'refusing nonlocal PostgreSQL target' >&2; exit 1 ;;
 esac
 if [[ "$target_database" != *test* && "$target_database" != *rehearsal* ]]; then
