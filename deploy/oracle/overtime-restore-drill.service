@@ -1,0 +1,13 @@
+[Unit]
+Description=AIMS overtime PostgreSQL temporary restore drill
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/opt/overtime/.env.backup
+# Refuse to read secrets if the backup environment file is not mode 0600.
+ExecStartPre=/bin/sh -c 'test "$(stat -c %%a /opt/overtime/.env.backup)" = 600'
+ExecStart=/opt/overtime/docker/postgres-restore-drill.sh
+UMask=0077

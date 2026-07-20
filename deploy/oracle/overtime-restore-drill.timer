@@ -1,0 +1,10 @@
+[Unit]
+Description=AIMS overtime weekly PostgreSQL restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00 Asia/Seoul
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target
