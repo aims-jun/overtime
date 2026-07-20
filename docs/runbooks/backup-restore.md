@@ -1,148 +1,58 @@
-# SQLite 백업과 복구
+# PostgreSQL 백업과 복구
 
-## 백업 원칙
+## 1. 백업 계약
 
-- 실행 중인 DB 파일을 `cp`로 복사하지 않습니다. WAL 파일과 시점이 어긋날 수 있습니다.
-- `sqlite3 .backup`으로 일관된 스냅샷을 만들고 `PRAGMA integrity_check`를 통과한 파일만 보관합니다.
-- 서버 디스크와 다른 장애 영역인 공급자별 비공개 객체 스토리지에도 복사합니다.
-- 백업이 있다는 사실보다 **복구 훈련이 성공했다는 기록**이 중요합니다.
+`docker/postgres-backup-oci.sh`는 다음 세 개를 하나의 backup set으로 생성한다.
 
-## 수동 백업
+- `postgres/overtime-<UTC>-<16-hex-run-id>.dump`: `pg_dump --format=custom --no-owner --no-acl` archive
+- 같은 prefix의 `.dump.sha256`: archive SHA-256
+- 같은 prefix의 `.metadata`: timestamp, PostgreSQL major/minor, 정확한 세 OCI key, `users_count`, `overtime_records_count`
 
-### GCP
+metadata는 마지막에 upload되는 commit marker다. marker가 없는 dump/checksum은 완료된 backup set이 아니다. 복구자는 bucket의 dump를 임의로 고르지 말고 정확한 `.metadata` key를 먼저 선택한 뒤 marker가 가리키는 dump/checksum만 사용한다. 중복 key가 하나라도 있으면 upload는 시작하지 않는다.
 
-VM 서비스 계정에는 대상 버킷의 `roles/storage.objectCreator`만 부여합니다.
+## 2. 자동화와 보존
 
-```bash
-sudo -u overtime env \
-  DATABASE_PATH=/data/overtime/overtime.sqlite \
-  BACKUP_DIR=/data/overtime/backups \
-  BACKUP_BUCKET=PROJECT_ID-overtime-backup \
-  BACKUP_RETENTION_DAYS=14 \
-  /opt/overtime/docker/backup.sh
-```
-
-Cloud Storage 버킷은 공개 액세스 방지를 켜고, 90일 이후 삭제하는 수명 주기 규칙을 설정합니다. 보존 정책을 잠그기 전에 실제 운영 기간과 법적 요구사항을 먼저 확인하세요. 수명 주기 삭제는 비동기로 실행되며 즉시 삭제를 보장하지 않습니다.
-
-### Oracle
-
-OCI 인스턴스의 dynamic group에는 대상 비공개 버킷의 객체만 관리할 수 있는 최소 권한을 부여합니다. 수동 백업은 instance principal 인증으로 Object Storage에 업로드합니다.
+Oracle systemd timer는 한국 시간 00:00, 06:00, 12:00, 18:00에, 즉 6시간마다 oneshot backup을 실행한다.
 
 ```bash
-sudo -u overtime env \
-  DATABASE_PATH=/data/overtime/overtime.sqlite \
-  BACKUP_DIR=/data/overtime/backups \
-  BACKUP_RETENTION_DAYS=30 \
-  OCI_BACKUP_BUCKET=aims-overtime-backups \
-  /opt/overtime/docker/backup-oci.sh
-```
-
-버킷은 private으로 유지하고 이름 prefix `overtime-`인 객체를 30일 후 삭제하는 Lifecycle Policy를 설정합니다. dynamic group과 bucket 정책을 포함한 전체 설정은 [Oracle Always Free 배포 실행서](oracle-deployment.md)를 따릅니다.
-
-## 매일 자동 백업
-
-`/etc/systemd/system/overtime-backup.service`:
-
-```ini
-[Unit]
-Description=Overtime SQLite backup
-
-[Service]
-Type=oneshot
-User=overtime
-Environment=DATABASE_PATH=/data/overtime/overtime.sqlite
-Environment=BACKUP_DIR=/data/overtime/backups
-Environment=BACKUP_BUCKET=PROJECT_ID-overtime-backup
-Environment=BACKUP_RETENTION_DAYS=14
-ExecStart=/opt/overtime/docker/backup.sh
-```
-
-`/etc/systemd/system/overtime-backup.timer`:
-
-```ini
-[Unit]
-Description=Daily overtime backup timer
-
-[Timer]
-OnCalendar=*-*-* 03:00:00 Asia/Seoul
-Persistent=true
-RandomizedDelaySec=5m
-
-[Install]
-WantedBy=timers.target
-```
-
-```bash
-sudo systemctl daemon-reload
 sudo systemctl enable --now overtime-backup.timer
 systemctl list-timers overtime-backup.timer
-journalctl -u overtime-backup.service
+sudo systemctl start overtime-backup.service
+sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus
+sudo journalctl -u overtime-backup.service --since today --no-pager
 ```
 
-## 복구 훈련
+`Result=success`와 `ExecMainStatus=0`을 모두 확인한다. OCI bucket은 private으로 유지하고 `postgres/` prefix의 객체를 30일 후 삭제하는 lifecycle rule을 설정한다. 서버의 `/data/overtime/postgres-backups`에서는 2일이 지난 `.dump`, `.dump.sha256`, `.metadata`를 script가 정리한다. OCI lifecycle은 local retention을 대신하지 않는다.
 
-먼저 운영 DB가 아닌 별도 경로에서 매달 한 번 확인합니다.
+## 3. 주간 복구 훈련
 
-### GCP
+매주 일요일 04:30 KST에 최근 commit marker를 임시 DB `overtime_restore_drill_<UTC digits>`로 복구한다. 운영 DB 이름과 형식에 맞지 않는 target은 script가 거부한다.
 
 ```bash
-gcloud storage cp gs://BUCKET/overtime-TIMESTAMP.sqlite /tmp/restore-source.sqlite
-RESTORE_SOURCE=/tmp/restore-source.sqlite \
-RESTORE_TARGET=/tmp/restore-drill.sqlite \
-  ./docker/restore.sh
-sqlite3 /tmp/restore-drill.sqlite 'PRAGMA integrity_check;'
+sudo systemctl enable --now overtime-restore-drill.timer
+sudo systemctl start overtime-restore-drill.service
+sudo systemctl show overtime-restore-drill.service -p Result -p ExecMainStatus
+sudo journalctl -u overtime-restore-drill.service --since today --no-pager
 ```
 
-### Oracle
-
-먼저 버킷의 실제 객체를 나열해 복구할 객체 이름을 선택합니다. 아래 `overtime-20260714T000000Z.sqlite`는 이름 형식을 보여주는 예시일 뿐이며, 실제 복구에서는 목록에 있는 객체 이름으로 바꿉니다.
+수동으로 특정 OCI set를 훈련할 때는 목록에 실제로 있는 exact marker key를 사용한다.
 
 ```bash
-oci os object list \
-  --auth instance_principal \
-  --bucket-name aims-overtime-backups \
-  --prefix overtime- \
-  --query 'data[].name' \
-  --output table
-
-(
-  set -euo pipefail
-  RESTORE_TMP_DIR=$(mktemp -d)
-  trap 'rm -rf "$RESTORE_TMP_DIR"' EXIT
-  read -r -p '복구할 Object Storage 객체 이름: ' OCI_BACKUP_OBJECT
-  if [[ ! "$OCI_BACKUP_OBJECT" =~ ^overtime-[0-9]{8}T[0-9]{6}Z\.sqlite$ ]]; then
-    echo '중지: overtime-YYYYMMDDTHHMMSSZ.sqlite 형식의 객체 이름이 아닙니다.' >&2
-    exit 1
-  fi
-  printf '선택한 복구 객체: %s\n' "$OCI_BACKUP_OBJECT"
-  RESTORE_SOURCE="$RESTORE_TMP_DIR/$OCI_BACKUP_OBJECT"
-  RESTORE_TARGET="$RESTORE_TMP_DIR/restore-drill.sqlite"
-  oci os object get \
-    --auth instance_principal \
-    --bucket-name aims-overtime-backups \
-    --name "$OCI_BACKUP_OBJECT" \
-    --file "$RESTORE_SOURCE"
-  test -s "$RESTORE_SOURCE"
-  RESTORE_SOURCE="$RESTORE_SOURCE" RESTORE_TARGET="$RESTORE_TARGET" ./docker/restore.sh
-  test "$(sqlite3 "$RESTORE_TARGET" 'PRAGMA integrity_check;')" = 'ok'
-)
+sudo env \
+  RESTORE_METADATA_OBJECT='postgres/overtime-<UTC>-<16-hex-run-id>.metadata' \
+  RESTORE_DATABASE="overtime_restore_drill_$(date -u +%Y%m%d%H%M%S)" \
+  /opt/overtime/docker/postgres-restore-drill.sh
 ```
 
-## 실제 장애 복구
+script는 marker 참조, checksum, `pg_restore --list`, migration version, users/records count, orphan FK, 기본 집계를 검증하고 EXIT trap에서 자기가 생성한 임시 DB만 정리한다. journal의 marker key, 시각, count, 결과를 운영 기록에 남긴다.
 
-쓰기 중 복구하지 않도록 순서를 지킵니다.
+## 4. 수동 복구 원칙
 
-```bash
-docker compose -f compose.production.yaml stop api
+- 일반 수동 복구는 `RESTORE_DATABASE=ovetime_restore_...`가 아닌 `overtime_restore_<14 UTC digits>` 형식의 새 staging DB만 허용하며 `CONFIRM_RESTORE=YES`를 요구한다.
+- checksum과 `pg_restore --list`를 DB 생성 전에 통과시키고, `createdb`로 fresh target을 만든 다음에만 restore한다.
+- production recovery는 [Oracle 배포 실행서](oracle-deployment.md#82-실제-장애-복구)의 별도 절차다. 현재 DB를 overwrite하지 않고, 현재 상태의 fresh backup 성공과 운영자의 명시적 확인 없이는 시작하지 않는다.
+- 장애 원인 분석을 위해 실패한 fresh target은 자동 삭제하지 않는다. 정리는 사후 변경 승인을 받아 target 이름을 다시 확인한 뒤 수행한다.
 
-sudo RESTORE_SOURCE=/safe/overtime-TIMESTAMP.sqlite \
-  RESTORE_TARGET=/data/overtime/overtime.sqlite \
-  CONFIRM_RESTORE=YES \
-  ./docker/restore.sh
+## 5. SQLite 이관 snapshot
 
-sudo chown 10001:10001 /data/overtime/overtime.sqlite
-docker compose -f compose.production.yaml up -d api
-curl --fail https://YOUR_DOMAIN/api/health
-```
-
-복구 후 사용자 수, 최근 기록, 월 합계를 표본 확인하고 장애 시점 이후 유실 범위를 기록합니다.
+PostgreSQL cutover 직전에 만든 최종 SQLite snapshot은 읽기 전용으로 30일 보존한다. 운영 기록에 snapshot 파일명, SHA-256, 생성 시각, `retain_until` 날짜, 원본 users/records/sessions count를 남긴다. 서비스 재개 전에만, PostgreSQL이 user write를 받지 않았을 때 SQLite rollback이 가능하다. 재개 후에는 PostgreSQL이 source of truth이며 이 snapshot으로 rollback하지 않는다.

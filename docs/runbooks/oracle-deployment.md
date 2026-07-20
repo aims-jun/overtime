@@ -1,408 +1,246 @@
-# Oracle Always Free 배포 실행서
+# Oracle Always Free PostgreSQL 배포 실행서
 
-이 문서는 `aims-overtime`을 Oracle Cloud Infrastructure(OCI)의 무료 리소스 한도 안에서 `https://aims-overtime.duckdns.org`에 배포하는 운영 절차다. 초기 배포는 수동으로 수행하며 Load Balancer나 자동 배포용 GitHub Actions는 만들지 않는다.
+이 문서는 `/opt/overtime`의 Compose 배포와 `/data`의 영속 데이터를 대상으로 한다. 프로덕션 접속 정보나 비밀값은 문서·shell history·Git에 남기지 않는다.
 
-## 1. 생성 전 고정값과 0원 확인
+## 1. 인프라 preflight
 
-Oracle 계정의 Home region은 **Japan East (Tokyo)** 로 선택한다. 홈 리전은 가입 후 바꿀 수 없으므로 계정 생성 화면에서 다시 확인한다.
-
-OCI Console의 **Compute → Instances → Create instance**에서 public subnet과 공인 IPv4를 사용하는 인스턴스를 만든다. 개발 PC의 SSH 공개 키를 등록하고, private key는 로컬에서만 보관한다. 다음 값을 사용한다.
-
-- Image: Canonical Ubuntu 24.04, ARM64, `Always Free Eligible`
-- Shape: `VM.Standard.A1.Flex`
-- CPU와 메모리: `1 OCPU`, `6 GB`
-- Boot volume: `50 GB`
-- 별도 Data block volume: `50 GB`
-- TCP 22: 관리자 현재 공인 IP에서만 허용
-- TCP 80/443: `0.0.0.0/0`에서 허용
-- TCP 3000: 외부에 공개하지 않음
-
-인스턴스와 볼륨의 **Create** 버튼을 누르기 전에 각 대상에 `Always Free Eligible` 표시가 있고 예상 월 비용이 0인지 확인한다. 이 배포를 위해 Load Balancer를 만들지 않는다. A1 용량 부족 오류가 발생해도 유료 shape로 바꾸거나 다른 유료 리소스를 만들지 말고, 같은 Tokyo 리전에서 나중에 다시 시도한다.
-
-VCN의 Network Security Group 또는 Security List에는 위 포트만 연다. Ubuntu 방화벽을 함께 쓴다면 SSH 접속을 잃지 않도록 관리자 IP의 22번 규칙을 먼저 적용한 뒤 80/443을 허용한다.
-
-생성 후 콘솔에 표시된 공인 IP와 등록한 개인 키로 SSH 접속을 확인한다.
+Ubuntu 24.04 ARM64, 1 OCPU/6 GB VM과 50 GB data volume을 사용한다. NSG/UFW에는 관리자 IP의 22와 public 80/443만 열고 API 3000과 PostgreSQL 5432는 열지 않는다. 불필요한 Load Balancer를 만들지 않는다.
 
 ```bash
-ssh -i /path/to/oracle-private-key ubuntu@<VM_PUBLIC_IP>
-```
-
-## 2. 비공개 GitHub 저장소 준비
-
-이 단계는 **개발 PC의 저장소 루트**에서 실행한다. GitHub CLI는 개발 PC에서만 사용하며 VM에 `gh`가 있다고 가정하지 않는다.
-
-```bash
-gh auth status
-gh api user --jq .login
-gh repo create aims-overtime --private --source=. --remote=origin --push
-```
-
-두 번째 명령이 출력한 GitHub owner를 기록해 둔다. 저장소가 이미 만들어졌다면 새로 만들지 말고 기존 private 저장소의 remote와 push 상태를 확인한다.
-
-Oracle VM에 SSH로 접속해 clone 전용 키를 만든다.
-
-```bash
-ssh-keygen -t ed25519 -f ~/.ssh/aims_overtime_deploy -C aims-overtime-oracle -N ''
-cat ~/.ssh/aims_overtime_deploy.pub
-```
-
-출력된 **공개 키만** GitHub 저장소의 **Settings → Deploy keys → Add deploy key**에 추가한다. `Allow write access`는 선택하지 않는다. 개인 키는 VM 밖이나 GitHub에 복사하지 않는다.
-
-VM의 `~/.ssh/config`에 다음 전용 Host를 추가하고 권한을 제한한다.
-
-```sshconfig
-Host github.com-aims-overtime
-  HostName github.com
-  User git
-  IdentityFile ~/.ssh/aims_overtime_deploy
-  IdentitiesOnly yes
-```
-
-```bash
-chmod 600 ~/.ssh/config ~/.ssh/aims_overtime_deploy
-ssh -T git@github.com-aims-overtime
-sudo install -d -o "$USER" -g "$USER" /opt/overtime
-read -r -p 'GitHub owner: ' GH_OWNER
-git clone "git@github.com-aims-overtime:${GH_OWNER}/aims-overtime.git" /opt/overtime
-```
-
-`GitHub owner` 프롬프트에는 개발 PC에서 `gh api user --jq .login`으로 확인한 값을 입력한다. VM에서 `gh`를 설치하거나 임의의 owner를 가정하지 않는다. `ssh -T`가 인증 성공 메시지 뒤 비대화형 셸 관련 종료 코드를 반환할 수 있으므로, 메시지에서 올바른 GitHub 계정으로 인증됐는지 확인한다.
-
-## 3. 50GB Block Volume 연결과 마운트
-
-OCI 콘솔에서 같은 Availability Domain에 `50 GB` Block Volume을 만들고 `Always Free Eligible` 및 예상 월 비용 0을 확인한다. 인스턴스에 **Attached** 상태로 연결한 다음, 콘솔의 **iSCSI commands & information**에 표시된 Attach 명령을 VM에서 그대로 실행한다.
-
-먼저 장치를 식별한다.
-
-```bash
-lsblk -f
-```
-
-> **데이터 손실 경고:** 다음 `mkfs`는 지정한 장치의 내용을 모두 지운다. `/dev/sdb`라는 이름을 임의로 가정하지 않는다. `lsblk -f`의 크기, 연결 시점, 빈 `FSTYPE`을 대조해 **방금 연결한 미포맷 50GB Block Volume**임을 확실히 확인한 경우에만 아래 `/dev/sdb`를 실제 장치 경로로 바꿔 실행한다. 부팅 디스크, 파티션, 이미 파일시스템이나 데이터가 있는 장치에는 절대 실행하지 않는다. 확신이 없으면 여기서 멈추고 OCI Attach 정보와 `lsblk -f` 출력을 다시 확인한다.
-
-확인된 실제 장치가 `/dev/sdb`일 때만 다음 순서로 진행한다.
-
-```bash
-lsblk -f
-sudo mkfs.ext4 -m 0 /dev/sdb
-sudo mkdir -p /data/overtime
-sudo blkid /dev/sdb
-```
-
-`blkid`가 출력한 UUID를 복사해 `/etc/fstab`에 등록한다. 장치 경로 대신 UUID를 사용한다.
-
-```fstab
-UUID=실제-blkid-UUID /data/overtime ext4 defaults,nofail 0 2
-```
-
-마운트와 권한을 확인한다.
-
-```bash
-sudo mount -a
-findmnt /data/overtime
-UID_ENTRY=$(getent passwd 10001 || true)
-NAME_ENTRY=$(getent passwd overtime || true)
-if [ -n "$UID_ENTRY" ] && [ -n "$NAME_ENTRY" ] && [ "$UID_ENTRY" = "$NAME_ENTRY" ]; then
-  echo 'overtime 사용자가 이미 UID 10001로 존재합니다.'
-elif [ -n "$UID_ENTRY" ] || [ -n "$NAME_ENTRY" ]; then
-  echo '중지: UID 10001 또는 overtime 이름이 다른 계정과 충돌합니다.' >&2
-  exit 1
-else
-  sudo useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin overtime
-fi
-sudo chown -R 10001:10001 /data/overtime
-id overtime
-ls -ldn /data/overtime
-```
-
-`getent passwd 10001`과 `getent passwd overtime`을 모두 확인한다. 두 조회가 동일한 기존 계정을 반환할 때만 재사용하고, UID 10001이 다른 이름에 할당됐거나 `overtime`이 다른 UID에 할당됐으면 명시적으로 중지한다. 두 조회가 모두 비어 있을 때만 사용자를 만든다. `findmnt`의 source가 등록한 UUID의 50GB 볼륨인지 확인한 후에 배포를 계속한다.
-
-## 4. Docker와 필수 도구 설치
-
-Docker의 Ubuntu 공식 저장소를 사용해 Engine, Buildx, Compose plugin을 설치한다.
-
-```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl dnsutils git openssl sqlite3
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker "$USER"
-```
-
-로그아웃 후 다시 SSH로 접속해 확인한다.
-
-```bash
+findmnt /data
+df -h /data
+free -h
 docker version
 docker compose version
 ```
 
-## 5. DuckDNS와 Google OAuth 설정
+볼륨은 device name을 눈대중으로 선택하지 말고 OCI attach 정보, `lsblk -f`, UUID를 대조한 뒤 `/etc/fstab`에 UUID로 등록한다.
 
-VM의 현재 공인 IPv4를 확인한다.
+## 2. PostgreSQL 디렉터리 소유권
 
-```bash
-curl -fsS https://api.ipify.org
-```
-
-DuckDNS에 로그인해 `aims-overtime` 서브도메인을 만들고 이 IPv4를 지정한다. DuckDNS token은 GitHub나 저장소 파일에 기록하지 않는다. DNS가 전파된 뒤 결과가 VM 공인 IP와 같은지 확인한다.
+official image 안의 `postgres` numeric UID/GID를 실행 중이 아닌 일회성 container로 확인한다. host에 임의의 999/10001을 가정하지 않는다.
 
 ```bash
-dig +short aims-overtime.duckdns.org
+mapfile -t PG_IDS < <(docker run --rm postgres:17.10-bookworm sh -c 'id -u postgres; id -g postgres')
+PG_UID="${PG_IDS[0]}"
+PG_GID="${PG_IDS[1]}"
+test "$PG_UID" -ge 1
+test "$PG_GID" -ge 1
+sudo install -d -m 0700 -o "$PG_UID" -g "$PG_GID" /data/postgres
+sudo install -d -m 0700 -o root -g root /data/overtime/postgres-backups
+findmnt /data
+ls -ldn /data/postgres /data/overtime/postgres-backups
 ```
 
-Google Cloud Console에서 이 앱의 OAuth 2.0 **웹 애플리케이션** 클라이언트를 열고 승인된 JavaScript 원본에 다음 값만 정확히 추가한다. 경로와 trailing slash는 붙이지 않는다.
-
-```text
-https://aims-overtime.duckdns.org
-```
-
-운영 환경은 `GOOGLE_HOSTED_DOMAIN=aimskr.com`, `ADMIN_EMAILS=contact@aimskr.com`을 유지한다. 대화 중 노출된 기존 Google OAuth 클라이언트 비밀번호(client secret)는 Google Cloud Console에서 즉시 재설정해 기존 값을 폐기한다. 이 앱은 Google client secret을 사용하지 않으므로 **기존 값과 새 값 모두 GitHub, `.env.production`, VM의 다른 파일이나 메모에 저장하지 않는다.** 저장소에 있는 `GOOGLE_CLIENT_ID`는 브라우저용 공개 식별자이며 client secret이 아니다.
-
-## 6. 운영 환경과 첫 배포
-
-VM에서 환경 파일을 만들고 세션 해시 비밀값을 생성한다.
+## 3. 운영 비밀값과 role 분리
 
 ```bash
 cd /opt/overtime
+umask 077
 cp deploy/oracle/production.env.example .env.production
-openssl rand -hex 32
-chmod 600 .env.production
+install -m 0600 /dev/null .env.backup
+for name in POSTGRES_ADMIN_PASSWORD POSTGRES_RUNTIME_PASSWORD POSTGRES_MIGRATION_PASSWORD POSTGRES_BACKUP_PASSWORD; do
+  printf '%s=' "$name"
+  openssl rand -hex 32
+done
+chmod 600 .env.production .env.backup
+stat -c '%a %n' .env.production .env.backup
 ```
 
-`openssl`이 출력한 64자 값을 `.env.production`의 빈 `SESSION_HASH_SECRET=` 뒤에 넣는다. 이 값은 Git에 커밋하거나 외부에 공유하지 않는다. `APP_ORIGINS`, `DOMAIN`, `GOOGLE_HOSTED_DOMAIN`, `ADMIN_EMAILS`, `OVERTIME_DATA_DIR`가 각각 아래 운영값인지도 확인한다.
+출력된 네 개의 64자 lowercase hex 값을 password manager에 보관하고 다음 용도로만 넣는다.
+
+- admin: container init과 응급 관리
+- runtime: `overtime_app`, API DML만
+- migration: `overtime_migrator`, schema owner/migration만
+- backup: `overtime_backup`, business table read-only dump만
+
+hex는 URL-safe이므로 인코딩 없이 다음 형태로 `.env.production`에 조립한다. 아래 placeholder를 실제 문서나 커밋에 채우지 않는다.
 
 ```dotenv
-APP_ORIGINS=https://aims-overtime.duckdns.org
-DOMAIN=aims-overtime.duckdns.org
-GOOGLE_HOSTED_DOMAIN=aimskr.com
-ADMIN_EMAILS=contact@aimskr.com
-OVERTIME_DATA_DIR=/data/overtime
+POSTGRES_DATA_DIR=/data/postgres
+POSTGRES_ADMIN_PASSWORD=<admin-hex>
+POSTGRES_RUNTIME_PASSWORD=<runtime-hex>
+POSTGRES_MIGRATION_PASSWORD=<migration-hex>
+POSTGRES_BACKUP_PASSWORD=<backup-hex>
+DATABASE_URL=postgresql://overtime_app:<runtime-hex>@postgres:5432/overtime
+DATABASE_MIGRATION_URL=postgresql://overtime_migrator:<migration-hex>@postgres:5432/overtime
 ```
 
-`SESSION_HASH_SECRET`가 여전히 비어 있으면 Compose를 실행하지 않는다. 설정을 렌더링한 뒤 VM에서 ARM64 이미지를 직접 빌드하고 시작한다.
+`.env.backup`에는 다음 항목만 넣고 backup password는 `.env.production`의 backup 값과 같게 설정한다.
+
+```dotenv
+POSTGRES_BACKUP_PASSWORD=<backup-hex>
+OCI_BACKUP_BUCKET=<private-bucket-name>
+BACKUP_DIR=/data/overtime/postgres-backups
+COMPOSE_ENV_FILE=/opt/overtime/.env.production
+COMPOSE_FILE=/opt/overtime/compose.production.yaml
+```
+
+## 4. 구성·포트·role 검증
 
 ```bash
 docker compose --env-file .env.production -f compose.production.yaml config --quiet
-docker compose --env-file .env.production -f compose.production.yaml up -d --build
-docker compose --env-file .env.production -f compose.production.yaml ps
+docker compose --env-file .env.production -f compose.production.yaml up -d postgres
+docker compose --env-file .env.production -f compose.production.yaml ps postgres
+docker compose --env-file .env.production -f compose.production.yaml exec -T postgres pg_isready -U postgres -d overtime
+ss -lnt
 ```
 
-HTTPS 인증서가 발급되고 API가 정상화될 때까지 상태와 로그를 확인한다.
+`ss -lnt`에 host `:5432` listener가 없어야 한다. Compose config에도 PostgreSQL `ports` mapping이 없어야 한다. init script는 최초의 빈 data directory에서만 role을 생성하므로, 기존 volume에 적용하려고 volume을 삭제하지 않는다.
+
+schema migration은 API 시작과 분리해 명시적으로 실행한다.
 
 ```bash
-docker compose --env-file .env.production -f compose.production.yaml logs --tail=200 api web
-curl --fail https://aims-overtime.duckdns.org/api/health
+set -a
+. ./.env.production
+set +a
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps \
+  -e DATABASE_MIGRATION_URL -e SQLITE_SOURCE_PATH=/not-used \
+  api npm run db:migrate
+unset POSTGRES_ADMIN_PASSWORD POSTGRES_RUNTIME_PASSWORD POSTGRES_MIGRATION_PASSWORD POSTGRES_BACKUP_PASSWORD DATABASE_URL DATABASE_MIGRATION_URL
 ```
 
-health check가 실패하면 다음 순서로 진단한다.
+## 5. SQLite에서 cutover
 
-1. `dig +short aims-overtime.duckdns.org`와 VM 공인 IP가 같은지 확인한다.
-2. OCI VCN/NSG와 Ubuntu 방화벽의 TCP 80/443 규칙을 확인한다. 외부 TCP 3000 규칙은 만들지 않는다.
-3. `docker compose ... ps`에서 API healthcheck와 컨테이너 재시작 여부를 확인한다.
-4. 위 `logs` 명령으로 Caddy 인증서, reverse proxy, NestJS 환경 변수와 migration 오류를 확인한다.
-5. `findmnt /data/overtime`, `df -h /data/overtime`, `ls -ldn /data/overtime`으로 마운트와 UID 10001 쓰기 권한을 확인한다.
-6. Google 로그인만 실패하면 승인된 JavaScript 원본과 `APP_ORIGINS`가 정확히 일치하는지 확인한다.
+이관 전에 기존 SQLite API image/Compose/env를 root-only rollback directory에 보존한다. 유지보수 승인 후 API를 멈춘 상태에서 final snapshot을 `.backup`으로 만들고 integrity, users/records/sessions count, SHA-256를 기록한다. snapshot과 원본은 read-only로 전환하고 `retain_until=<snapshot UTC date + 30 days>`를 기록한다.
 
-직원 `@aimskr.com` 계정으로 등록·조회하고, `contact@aimskr.com` 계정이 관리자 화면으로 이동하는지 확인한다. 허용되지 않은 도메인 계정은 거절되어야 한다.
-
-## 7. Object Storage와 instance principal 백업
-
-OCI 콘솔에서 다음 리소스를 만든다.
-
-1. Object Storage에서 `aims-overtime-backups` 이름의 **private** Standard bucket을 같은 홈 리전에 만든다. Public access는 허용하지 않는다.
-2. Identity & Security → Dynamic Groups에서 VM instance OCID 하나만 식별하는 dynamic group(예: `aims-overtime-backup-instances`)을 만든다. matching rule은 `instance.id = '<VM_INSTANCE_OCID>'`로 제한한다.
-3. Identity & Security → Policies에서 해당 dynamic group이 지정 bucket의 object만 관리하도록 정책을 만든다. compartment와 dynamic group 이름은 실제 이름으로 바꾼다.
-
-```text
-Allow dynamic-group aims-overtime-backup-instances to manage objects in compartment <COMPARTMENT_NAME> where target.bucket.name = 'aims-overtime-backups'
-```
-
-이 정책에는 bucket 관리나 다른 리소스 권한을 추가하지 않는다. 정책 전파에는 몇 분이 걸릴 수 있다.
-
-OCI CLI는 systemd 서비스의 `overtime` 사용자도 실행할 수 있도록 `/usr/local/bin/oci`에 설치한다. mutable `master` 대신 검토한 OCI CLI commit `7242aae6b3959f8006e7a69ac4c6b4b104dda0df`의 설치 스크립트를 내려받고 SHA-256을 확인한 뒤, CLI `3.89.2`를 시스템 경로에 설치한다.
+schema migration 후 final snapshot을 read-only mount해 이관한다.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/oracle/oci-cli/7242aae6b3959f8006e7a69ac4c6b4b104dda0df/scripts/install/install.sh -o /tmp/oci-cli-install.sh
-echo '079dcc9a3e2a61ec692400e30169c9996b2998ac8c4e205198ed5863283fcb76  /tmp/oci-cli-install.sh' | sha256sum -c -
-sudo bash /tmp/oci-cli-install.sh --accept-all-defaults --install-dir /opt/oci-cli --exec-dir /usr/local/bin --oci-cli-version 3.89.2
-test "$(oci --version)" = '3.89.2'
-oci os ns get --auth instance_principal
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps \
+  -v /data/overtime/sqlite-archive:/migration-source:ro \
+  -e SQLITE_SOURCE_PATH=/migration-source/<final-snapshot-name> \
+  -e DATABASE_MIGRATION_URL \
+  api npm run db:migrate:sqlite
 ```
 
-마지막 명령이 instance principal로 namespace를 반환하는지 확인한다. 로컬 OCI API key나 config 파일을 만들 필요가 없다.
+source/target users·records ID/count/hash, target sessions 0, orphan 0, 집계, migration version을 독립 조회로 다시 확인한다. 검증 전에는 서비스를 재개하지 않는다.
 
-`/opt/overtime/.env.backup`을 만들고 편집한다.
+rollback 경계는 서비스 재개다. 재개 전이고 PostgreSQL user write가 0일 때만 보존한 SQLite image/env로 복귀할 수 있다. 재개 후는 PostgreSQL이 source of truth이며 SQLite로 돌아가지 않는다. SQLite snapshot은 30일 동안 read-only로 보존한 뒤 별도 승인과 checksum 대조 후 폐기한다.
+
+## 6. 백업과 임시 복구 증거
+
+private OCI bucket에 `postgres/` prefix 30일 lifecycle을 설정하고 instance principal에 해당 bucket object 최소 권한만 부여한다.
 
 ```bash
-sudo install -m 0600 -o overtime -g overtime /dev/null /opt/overtime/.env.backup
-sudoedit /opt/overtime/.env.backup
-```
-
-파일에는 다음 **정확한 내용만** 넣는다.
-
-```dotenv
-DATABASE_PATH=/data/overtime/overtime.sqlite
-BACKUP_DIR=/data/overtime/backups
-BACKUP_RETENTION_DAYS=30
-OCI_BACKUP_BUCKET=aims-overtime-backups
-```
-
-```bash
-sudo chown overtime:overtime /opt/overtime/.env.backup
-sudo chmod 600 /opt/overtime/.env.backup
-sudo install -m 0644 deploy/oracle/overtime-backup.service /etc/systemd/system/
-sudo install -m 0644 deploy/oracle/overtime-backup.timer /etc/systemd/system/
+sudo install -m 0644 deploy/oracle/overtime-backup.service deploy/oracle/overtime-backup.timer /etc/systemd/system/
+sudo install -m 0644 deploy/oracle/overtime-restore-drill.service deploy/oracle/overtime-restore-drill.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now overtime-backup.timer
+systemd-analyze verify deploy/oracle/overtime-backup.service deploy/oracle/overtime-backup.timer deploy/oracle/overtime-restore-drill.service deploy/oracle/overtime-restore-drill.timer
 sudo systemctl start overtime-backup.service
-sudo systemctl status overtime-backup.service --no-pager || true
-BACKUP_STATE=$(sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus)
-printf '%s\n' "$BACKUP_STATE"
-sudo journalctl -u overtime-backup.service --since today --no-pager
-if ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'Result=success' || ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'ExecMainStatus=0'; then
-  echo '중지: 백업 oneshot이 성공하지 않았습니다.' >&2
-  exit 1
-fi
-sudo systemctl list-timers overtime-backup.timer
+sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus
+sudo systemctl start overtime-restore-drill.service
+sudo systemctl show overtime-restore-drill.service -p Result -p ExecMainStatus
+sudo journalctl -u overtime-backup.service -u overtime-restore-drill.service --since today --no-pager
 ```
 
-`overtime-backup.service`는 oneshot unit이므로 실행 후 `inactive (dead)`여도 성공일 수 있다. 위 `systemctl show`의 `Result=success`, `ExecMainStatus=0`과 journal을 모두 확인한 뒤에만 백업 성공으로 기록한다.
-
-Oracle VM에서 unit 문법도 검증한다.
+백업 성공 증거는 marker가 참조하는 exact `.dump`, `.dump.sha256`, `.metadata` 세 key, `Result=success`, `ExecMainStatus=0`이다. 복구 성공 증거는 temporary DB의 migration/count/FK/집계 통과와 EXIT cleanup journal이다. 이 두 증거를 보존한 뒤에만 timer를 켠다.
 
 ```bash
-systemd-analyze verify deploy/oracle/overtime-backup.service deploy/oracle/overtime-backup.timer
-journalctl -u overtime-backup.service --since today --no-pager
+sudo systemctl enable --now overtime-backup.timer overtime-restore-drill.timer
+systemctl list-timers overtime-backup.timer overtime-restore-drill.timer
 ```
 
-Bucket의 Lifecycle Policy에 이름 prefix `overtime-`인 객체를 **30일 후 삭제**하는 규칙을 추가한다. 로컬 백업도 스크립트의 `BACKUP_RETENTION_DAYS=30`에 따라 정리된다. Object Storage 객체 목록에서 `overtime-YYYYMMDDTHHMMSSZ.sqlite`가 생성됐는지 확인한다.
+## 7. 정기 배포
 
-## 8. 백업 복구 훈련과 실제 복구
+배포 전에 current commit, fresh backup marker, backup service 성공을 기록한다. `git pull --ff-only`, image build, explicit migration, API/web recreate, health check 순서를 지킨다. 앱 버전 rollback은 DB migration을 자동으로 되돌리지 않는다.
 
-매달 한 번 Object Storage 백업을 운영 DB와 다른 임시 경로에 내려받아 복구 훈련을 한다. 고정 `/tmp` 파일을 재사용하지 않고 매번 새 staging directory를 만들며, 실제 최근 백업 객체 이름을 입력하고 검증한다. 다음 fail-fast subshell은 다운로드가 실패하면 복구를 실행하지 않고 임시 디렉터리를 정리한다.
+## 8. 복구
+
+### 8.1 안전한 원격 backup 선택
+
+exact OCI metadata key로 먼저 주간 훈련을 성공시킨다. 운영 DB 이름을 넘기면 script가 거부한다.
 
 ```bash
-(
-  set -euo pipefail
-  RESTORE_TMP_DIR=$(mktemp -d)
-  trap 'rm -rf "$RESTORE_TMP_DIR"' EXIT
-  read -r -p '복구할 Object Storage 객체 이름: ' OCI_BACKUP_OBJECT
-  if [[ ! "$OCI_BACKUP_OBJECT" =~ ^overtime-[0-9]{8}T[0-9]{6}Z\.sqlite$ ]]; then
-    echo '중지: overtime-YYYYMMDDTHHMMSSZ.sqlite 형식의 객체 이름이 아닙니다.' >&2
-    exit 1
-  fi
-  printf '선택한 복구 객체: %s\n' "$OCI_BACKUP_OBJECT"
-  RESTORE_SOURCE="$RESTORE_TMP_DIR/$OCI_BACKUP_OBJECT"
-  RESTORE_TARGET="$RESTORE_TMP_DIR/restore-drill.sqlite"
-  oci os object get --auth instance_principal --bucket-name aims-overtime-backups --name "$OCI_BACKUP_OBJECT" --file "$RESTORE_SOURCE"
-  test -s "$RESTORE_SOURCE"
-  RESTORE_SOURCE="$RESTORE_SOURCE" RESTORE_TARGET="$RESTORE_TARGET" ./docker/restore.sh
-  test "$(sqlite3 "$RESTORE_TARGET" 'PRAGMA integrity_check;')" = 'ok'
-  printf '복구 훈련 성공: %s %s\n' "$(date -u +%FT%TZ)" "$OCI_BACKUP_OBJECT"
-)
+RESTORE_METADATA_OBJECT='postgres/overtime-<UTC>-<16-hex-run-id>.metadata' \
+RESTORE_DATABASE="overtime_restore_drill_$(date -u +%Y%m%d%H%M%S)" \
+OCI_BACKUP_BUCKET='<private-bucket-name>' \
+./docker/postgres-restore-drill.sh
 ```
 
-성공 메시지의 날짜, 선택한 객체 이름, 결과를 운영 기록에 남긴다. 실제 장애 복구도 별도의 새 staging directory에 선택한 객체를 다시 내려받는다. 객체 이름 검증과 다운로드가 성공한 뒤에만 API 쓰기를 멈추고 실제 DB 복구를 수행한다.
+### 8.2 실제 장애 복구
+
+이 절차는 주간 훈련과 별도다. 현재 상태의 fresh backup을 먼저 생성·upload하고 exact marker key를 기록한다.
+
+```bash
+sudo systemctl start overtime-backup.service
+test "$(sudo systemctl show overtime-backup.service -p Result --value)" = success
+test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" = 0
+```
+
+복구할 marker 세트가 주간 훈련을 통과한 뒤 아래를 `/opt/overtime`에서 실행한다. 운영 DB를 덮어쓰지 않고 새 staging DB를 만든다. 실패하면 EXIT trap이 기존 env를 복원하고 API 재기동을 시도한다.
 
 ```bash
 (
   set -euo pipefail
-  RESTORE_TMP_DIR=$(mktemp -d)
+  read -r -p '정확한 OCI metadata key: ' RESTORE_METADATA_OBJECT
+  read -r -p '새 target DB (overtime_restore_YYYYMMDDhhmmss): ' RESTORE_DATABASE
+  read -r -p '복구 확인 (YES): ' CONFIRM_RESTORE
+  if [[ "$RESTORE_DATABASE" == overtime || ! "$RESTORE_DATABASE" =~ ^overtime_restore_[0-9]{14}$ ]]; then echo '중지: 안전하지 않은 target DB' >&2; exit 1; fi
+  if [[ "$CONFIRM_RESTORE" != YES ]]; then echo '중지: CONFIRM_RESTORE=YES가 필요합니다.' >&2; exit 1; fi
+  [[ "$RESTORE_METADATA_OBJECT" =~ ^postgres/overtime-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{16}\.metadata$ ]]
+
+  TMP="$(mktemp -d)"
   API_STOPPED=0
+  CONFIG_SWITCHED=0
+  cp .env.production "$TMP/env.production.before"
   restore_api_on_exit() {
-    exit_status=$?
+    status=$?
     set +e
     if [[ "$API_STOPPED" == 1 ]]; then
-      sudo chown 10001:10001 /data/overtime/overtime.sqlite
-      if ! docker compose --env-file .env.production -f compose.production.yaml up -d api \
-        || ! curl --fail --retry 10 --retry-delay 2 --retry-all-errors https://aims-overtime.duckdns.org/api/health; then
-        echo '긴급 확인 필요: 실제 복구 실패 후 API 자동 재기동 또는 health check도 실패했습니다.' >&2
-        exit_status=1
-      else
-        echo '실제 복구 실패 후 API를 자동 재기동했습니다.' >&2
-      fi
+      if [[ "$CONFIG_SWITCHED" == 1 ]]; then cp "$TMP/env.production.before" .env.production; chmod 600 .env.production; fi
+      docker compose --env-file .env.production -f compose.production.yaml up -d api
     fi
-    rm -rf "$RESTORE_TMP_DIR"
-    exit "$exit_status"
+    rm -rf "$TMP"
+    exit "$status"
   }
   trap restore_api_on_exit EXIT
-  read -r -p '실제 복구할 Object Storage 객체 이름: ' OCI_BACKUP_OBJECT
-  if [[ ! "$OCI_BACKUP_OBJECT" =~ ^overtime-[0-9]{8}T[0-9]{6}Z\.sqlite$ ]]; then
-    echo '중지: overtime-YYYYMMDDTHHMMSSZ.sqlite 형식의 객체 이름이 아닙니다.' >&2
-    exit 1
-  fi
-  printf '선택한 실제 복구 객체: %s\n' "$OCI_BACKUP_OBJECT"
-  RESTORE_SOURCE="$RESTORE_TMP_DIR/$OCI_BACKUP_OBJECT"
-  oci os object get --auth instance_principal --bucket-name aims-overtime-backups --name "$OCI_BACKUP_OBJECT" --file "$RESTORE_SOURCE"
-  test -s "$RESTORE_SOURCE"
-  test "$(sqlite3 "$RESTORE_SOURCE" 'PRAGMA integrity_check;')" = 'ok'
+
+  METADATA="$TMP/$(basename "$RESTORE_METADATA_OBJECT")"
+  oci os object get --auth instance_principal --bucket-name "$OCI_BACKUP_BUCKET" --name "$RESTORE_METADATA_OBJECT" --file "$METADATA"
+  value() { sed -n "s/^$1=//p" "$METADATA"; }
+  ARCHIVE_NAME="$(value archive)"
+  DUMP_KEY="$(value remote_dump_key)"
+  CHECKSUM_KEY="$(value remote_checksum_key)"
+  USERS_COUNT="$(value users_count)"
+  RECORDS_COUNT="$(value overtime_records_count)"
+  [[ "$DUMP_KEY" == "${RESTORE_METADATA_OBJECT%.metadata}.dump" ]]
+  [[ "$CHECKSUM_KEY" == "${RESTORE_METADATA_OBJECT%.metadata}.dump.sha256" ]]
+  [[ "$USERS_COUNT" =~ ^[0-9]+$ && "$RECORDS_COUNT" =~ ^[0-9]+$ ]]
+  ARCHIVE="$TMP/$ARCHIVE_NAME"
+  CHECKSUM="$TMP/$ARCHIVE_NAME.sha256"
+  oci os object get --auth instance_principal --bucket-name "$OCI_BACKUP_BUCKET" --name "$DUMP_KEY" --file "$ARCHIVE"
+  oci os object get --auth instance_principal --bucket-name "$OCI_BACKUP_BUCKET" --name "$CHECKSUM_KEY" --file "$CHECKSUM"
+  (cd "$TMP" && sha256sum -c "$(basename "$CHECKSUM")")
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres pg_restore --list < "$ARCHIVE"
+
   docker compose --env-file .env.production -f compose.production.yaml stop api
   API_STOPPED=1
-  sudo env RESTORE_SOURCE="$RESTORE_SOURCE" RESTORE_TARGET=/data/overtime/overtime.sqlite CONFIRM_RESTORE=YES ./docker/restore.sh
-  sudo chown 10001:10001 /data/overtime/overtime.sqlite
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'exec createdb --username "$POSTGRES_USER" --owner overtime_migrator "$1"' sh "$RESTORE_DATABASE"
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'export PGPASSWORD="$POSTGRES_MIGRATION_PASSWORD"; exec pg_restore --exit-on-error --no-owner --no-acl --username overtime_migrator --dbname "$1"' sh "$RESTORE_DATABASE" < "$ARCHIVE"
+  COUNTS="$(docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --tuples-only --no-align --command='SELECT (SELECT COUNT(*) FROM users) || '\''|'\'' || (SELECT COUNT(*) FROM overtime_records);' | tr -d '[:space:]')"
+  test "$COUNTS" = "$USERS_COUNT|$RECORDS_COUNT"
+
+  sed -E "s#^(DATABASE(_MIGRATION)?_URL=postgresql://[^/]+/)[^?]+#\\1$RESTORE_DATABASE#" .env.production > "$TMP/env.production.next"
+  chmod 600 "$TMP/env.production.next"
+  docker compose --env-file "$TMP/env.production.next" -f compose.production.yaml config --quiet
+  cp "$TMP/env.production.next" .env.production
+  chmod 600 .env.production
+  CONFIG_SWITCHED=1
   docker compose --env-file .env.production -f compose.production.yaml up -d api
-  curl --fail --retry 10 --retry-delay 2 --retry-all-errors https://aims-overtime.duckdns.org/api/health
+  curl --fail --retry 10 --retry-delay 2 --retry-all-errors "https://$DOMAIN/api/health"
   API_STOPPED=0
-  printf '실제 복구 성공: %s %s\n' "$(date -u +%FT%TZ)" "$OCI_BACKUP_OBJECT"
+  CONFIG_SWITCHED=0
+  printf '복구 성공: marker=%s target=%s counts=%s\n' "$RESTORE_METADATA_OBJECT" "$RESTORE_DATABASE" "$COUNTS"
 )
 ```
 
-복구 뒤 사용자 수, 최근 기록과 월 합계를 표본 확인하고 유실 가능 시간대를 기록한다. 앱 버전 롤백은 DB migration을 자동으로 되돌리지 않으므로, 스키마 변경 장애라면 배포 전 백업으로 DB까지 복구할지 별도로 판단한다.
+성공 후 marker, checksum, target, users/records count, migration version, orphan count, health check, 유실 가능 시간대를 기록한다. 이전 DB는 즉시 정리하지 말고 별도 승인 후 폐기한다.
 
-## 9. 정기 배포와 롤백
+## 9. 월별 점검
 
-정기 배포 전에는 현재 DB 백업 성공과 현재 커밋 SHA를 먼저 기록한다.
-
-```bash
-cd /opt/overtime
-sudo systemctl start overtime-backup.service
-sudo systemctl status overtime-backup.service --no-pager || true
-BACKUP_STATE=$(sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus)
-printf '%s\n' "$BACKUP_STATE"
-sudo journalctl -u overtime-backup.service --since today --no-pager
-if ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'Result=success' || ! printf '%s\n' "$BACKUP_STATE" | grep -qx 'ExecMainStatus=0'; then
-  echo '중지: 배포 전 백업 oneshot이 성공하지 않았습니다.' >&2
-  exit 1
-fi
-git rev-parse HEAD
-git pull --ff-only
-docker compose --env-file .env.production -f compose.production.yaml up -d --build
-docker compose --env-file .env.production -f compose.production.yaml ps
-curl --fail https://aims-overtime.duckdns.org/api/health
-```
-
-`git rev-parse HEAD`의 배포 전 SHA와 생성된 Object Storage 백업 이름을 운영 기록에 남긴다. health check가 실패하면 로그를 확인하고 기록한 이전 SHA로 롤백한다.
-
-```bash
-git switch --detach <PREVIOUS_SHA>
-docker compose --env-file .env.production -f compose.production.yaml up -d --build
-docker compose --env-file .env.production -f compose.production.yaml ps
-curl --fail https://aims-overtime.duckdns.org/api/health
-docker compose --env-file .env.production -f compose.production.yaml logs --tail=200 api web
-```
-
-롤백 검증 중에는 `git checkout <sha>` 대신 의도가 명확한 `git switch --detach <sha>`를 사용한다. 정상화 후 다음 배포를 준비할 때 브랜치로 복귀한다.
-
-```bash
-git switch main
-git pull --ff-only
-```
-
-## 10. 월별 0원·운영 점검
-
-매달 OCI Console과 VM에서 다음을 확인하고 기록한다.
-
-- Compute가 `VM.Standard.A1.Flex`, `1 OCPU`, `6 GB`이며 계속 Always Free 범위인지 확인한다.
-- boot `50 GB` + block `50 GB`, 합계 `100GB`이고 추가 boot/block volume이나 유료 backup/snapshot이 없는지 확인한다.
-- `aims-overtime-backups` Object Storage 사용량이 `20GB` 미만이며 `overtime-` 30일 lifecycle rule이 동작하는지 확인한다.
-- Load Balancer, 추가 VM, 유료 shape/image, 추가 공인 IP 등 의도하지 않은 유료 리소스가 없는지 확인한다.
-- Billing & Cost Management의 Cost Analysis에서 실제 비용이 0인지 확인한다. `Always Free Eligible` 표시는 실제 비용 확인을 대신하지 않는다.
-- `sudo systemctl list-timers overtime-backup.timer`, 최근 service journal, 최근 Object Storage 객체를 확인한다.
-- `df -h /data/overtime`로 데이터와 로컬 백업 사용량을 확인하고, 별도 경로 복구 훈련을 월 1회 수행한다.
-- `curl --fail https://aims-overtime.duckdns.org/api/health`와 직원/관리자 로그인을 확인한다.
-
-Always Free 정책과 한도는 바뀔 수 있다. 월별 점검 때 OCI의 최신 Always Free 조건도 함께 확인하며, Oracle의 장기 유휴 A1 회수 가능성, 무료 서비스와 DuckDNS의 SLA 부재를 운영 위험으로 유지한다.
+- OCI 실제 비용, Always Free 자격, 볼륨·Object Storage 사용량
+- backup 6시간 timer, 최근 marker set, 30일 lifecycle, local 2일 retention
+- 주간 temporary restore journal과 정리 성공
+- `/data/postgres` 용량·소유권, memory, container restart, host 5432 비노출
+- API health, 로그인, 관리자 집계/CSV
