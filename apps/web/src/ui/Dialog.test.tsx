@@ -43,4 +43,22 @@ describe('shared UI primitives', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(opener).toHaveFocus()
   })
+
+  it('locks document scrolling while the dialog is open', () => {
+    const { rerender } = render(
+      <Dialog open title="업무 시간 입력" onClose={() => undefined}>
+        <button>저장</button>
+      </Dialog>,
+    )
+
+    expect(document.documentElement).toHaveClass('dialog-open')
+
+    rerender(
+      <Dialog open={false} title="업무 시간 입력" onClose={() => undefined}>
+        <button>저장</button>
+      </Dialog>,
+    )
+
+    expect(document.documentElement).not.toHaveClass('dialog-open')
+  })
 })

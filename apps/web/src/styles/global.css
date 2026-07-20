@@ -20,8 +20,20 @@
 }
 
 * { box-sizing: border-box; }
-html { min-width: 320px; background: var(--background); }
-body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--background); }
+html { min-width: 320px; max-width: 100%; overflow-x: clip; background: var(--background); }
+body { margin: 0; min-width: 320px; max-width: 100%; min-height: 100vh; background: var(--background); }
+html.dialog-open,
+html.dialog-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.dialog-open body {
+  position: fixed;
+  top: var(--dialog-scroll-offset, 0);
+  right: 0;
+  left: 0;
+  width: 100%;
+}
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .62; }
@@ -52,7 +64,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   width: min(560px, calc(100vw - 32px));
   max-height: min(88vh, 760px);
   padding: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 0;
   border-radius: 24px;
   background: var(--surface);
@@ -163,6 +177,7 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   box-shadow: 0 16px 50px rgba(23, 33, 24, .07);
 }
 .record-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
+.record-form > *, .time-fields > * { min-width: 0; max-width: 100%; }
 .record-form .field-wide, .record-form .time-fields, .record-form .time-preview,
 .record-form .form-error, .record-form .form-actions { grid-column: 1 / -1; }
 .overtime-editor-dialog .record-form { padding: 24px; }
@@ -174,6 +189,8 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .field > span { color: #4e584f; font-size: 12px; font-weight: 750; }
 .field input, .field textarea, .field select, .month-picker input, .admin-filters select {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: 11px;
   color: var(--ink);
@@ -400,8 +417,8 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 
 @media (max-width: 767px) {
   .app-dialog {
-    width: 100%;
-    max-width: none;
+    width: min(100%, 100dvw);
+    max-width: 100dvw;
     max-height: 92vh;
     margin: auto 0 0;
     border-radius: 24px 24px 0 0;

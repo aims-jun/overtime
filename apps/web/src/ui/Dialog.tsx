@@ -18,9 +18,39 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
+let scrollLockCount = 0
+let lockedScrollY = 0
+
+function lockDocumentScroll() {
+  if (scrollLockCount === 0) {
+    lockedScrollY = window.scrollY
+    document.documentElement.style.setProperty(
+      '--dialog-scroll-offset',
+      `-${lockedScrollY}px`,
+    )
+    document.documentElement.classList.add('dialog-open')
+  }
+  scrollLockCount += 1
+}
+
+function unlockDocumentScroll() {
+  scrollLockCount = Math.max(0, scrollLockCount - 1)
+  if (scrollLockCount > 0) return
+
+  document.documentElement.classList.remove('dialog-open')
+  document.documentElement.style.removeProperty('--dialog-scroll-offset')
+  if (lockedScrollY > 0) window.scrollTo(0, lockedScrollY)
+  lockedScrollY = 0
+}
+
 export function Dialog({ open, title, onClose, className, children }: DialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const onCloseRef = useRef(onClose)
   const titleId = useId()
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!open) return
@@ -31,15 +61,16 @@ export function Dialog({ open, title, onClose, className, children }: DialogProp
     const opener = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
+    lockDocumentScroll()
     const handleCancel = (event: Event) => {
       event.preventDefault()
-      onClose()
+      onCloseRef.current()
     }
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
 
       event.preventDefault()
-      onClose()
+      onCloseRef.current()
     }
 
     dialog.addEventListener('cancel', handleCancel)
@@ -54,9 +85,10 @@ export function Dialog({ open, title, onClose, className, children }: DialogProp
     return () => {
       dialog.removeEventListener('cancel', handleCancel)
       dialog.removeEventListener('keydown', handleKeyDown)
+      unlockDocumentScroll()
       opener?.focus()
     }
-  }, [onClose, open])
+  }, [open])
 
   if (!open) return null
 

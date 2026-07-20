@@ -1,9 +1,12 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
+import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { server } from '../test/server'
 import { OvertimeForm } from './OvertimeForm'
+
+const globalStyles = readFileSync('src/styles/global.css', 'utf8')
 
 const EXPECTED_TIME_OPTIONS = [
   '00:00',
@@ -68,6 +71,18 @@ const record = {
 }
 
 describe('OvertimeForm', () => {
+  it('allows native form controls and the mobile dialog to shrink to the viewport', () => {
+    expect(globalStyles).toContain(
+      '.record-form > *, .time-fields > * { min-width: 0; max-width: 100%; }',
+    )
+    expect(globalStyles).toMatch(
+      /\.field input, \.field textarea, \.field select,[\s\S]*min-width: 0;[\s\S]*max-width: 100%;/,
+    )
+    expect(globalStyles).toMatch(
+      /@media \(max-width: 767px\) \{[\s\S]*\.app-dialog \{[\s\S]*width: min\(100%, 100dvw\);[\s\S]*max-width: 100dvw;/,
+    )
+  })
+
   it('offers start and end times in 30-minute increments', () => {
     render(<OvertimeForm onSaved={vi.fn()} />)
 
