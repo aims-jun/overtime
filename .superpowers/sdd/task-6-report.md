@@ -104,3 +104,51 @@ git diff --check
 ```
 
 All commands exited 0.
+
+## Final remote correctness fix
+
+### RED
+
+Added deterministic `RUN_ID` contract coverage before implementation. The first
+run failed with exit 1 and:
+
+```text
+backup unexpectedly accepted an invalid run ID
+```
+
+The same test expansion requires nonce-bearing remote keys, exact dump and
+checksum key references in the metadata marker, no `--force` on puts, and an
+ambiguous final-metadata failure where the fake OCI server stores the object
+before returning nonzero. It verifies rollback deletes that failed current key
+plus all prior current-run keys while leaving a preexisting complete set with a
+different nonce untouched.
+
+### GREEN
+
+- Each run uses an injected or `openssl rand -hex 8` run ID, validated as
+  exactly 16 lowercase hexadecimal characters.
+- Remote keys use `postgres/overtime-<UTC>-<RUN_ID>.*`; puts never use
+  `--force`.
+- The local metadata commit marker records the exact unique dump, checksum, and
+  metadata object keys. Script help defines that consumers enumerate only
+  `.metadata` markers and validate their referenced payloads.
+- The uploader validates the marker's timestamp, run ID, and exact key
+  relationships before upload.
+- Every key is recorded as attempted before its put. Any nonzero put therefore
+  reconciles the failed current key as well as all preceding keys, covering
+  server-side commit followed by an error.
+- Remote metadata remains the last and only remote commit marker; rollback
+  failure remains explicit and the job remains failed.
+
+Focused verification:
+
+```text
+bash -n docker/postgres-backup.sh docker/postgres-backup-oci.sh docker/backup-restore.test.sh
+bash docker/backup-restore.test.sh
+# PostgreSQL backup and OCI upload contract passed
+bash deploy/oracle/systemd-units.test.sh
+# oracle PostgreSQL backup systemd unit contract passed
+git diff --check
+```
+
+All commands exited 0.

@@ -23,17 +23,39 @@ target_metadata="${target_dump%.dump}.metadata"
 
 (cd "$BACKUP_DIR" && sha256sum -c "$(basename "$target_checksum")") >/dev/null
 
-uploaded_names=()
+metadata_value() {
+  local key="$1"
+  sed -n "s/^${key}=//p" "$target_metadata"
+}
+
+timestamp="$(metadata_value timestamp_utc)"
+run_id="$(metadata_value run_id)"
+remote_dump_key="$(metadata_value remote_dump_key)"
+remote_checksum_key="$(metadata_value remote_checksum_key)"
+remote_metadata_key="$(metadata_value remote_metadata_key)"
+if [[ ! "$timestamp" =~ ^[0-9]{8}T[0-9]{6}Z$ || ! "$run_id" =~ ^[0-9a-f]{16}$ ]]; then
+  echo 'backup metadata has an invalid timestamp or run ID' >&2
+  exit 1
+fi
+remote_prefix="postgres/overtime-$timestamp-$run_id"
+if [[ "$remote_dump_key" != "$remote_prefix.dump" ||
+      "$remote_checksum_key" != "$remote_prefix.dump.sha256" ||
+      "$remote_metadata_key" != "$remote_prefix.metadata" ]]; then
+  echo 'backup metadata contains inconsistent remote object keys' >&2
+  exit 1
+fi
+
+attempted_names=()
 rollback_uploaded() {
   local rollback_failed=0
   local index
-  for ((index=${#uploaded_names[@]} - 1; index >= 0; index--)); do
+  for ((index=${#attempted_names[@]} - 1; index >= 0; index--)); do
     if ! oci os object delete \
       --auth instance_principal \
       --bucket-name "$OCI_BACKUP_BUCKET" \
-      --name "${uploaded_names[index]}" \
+      --name "${attempted_names[index]}" \
       --force >/dev/null; then
-      echo "OCI rollback failed for ${uploaded_names[index]}" >&2
+      echo "OCI rollback failed for ${attempted_names[index]}" >&2
       rollback_failed=1
     fi
   done
@@ -41,21 +63,23 @@ rollback_uploaded() {
 }
 
 # Metadata is uploaded last and acts as the remote set's commit marker.
-for artifact in "$target_dump" "$target_checksum" "$target_metadata"; do
-  object_name="postgres/$(basename "$artifact")"
+artifacts=("$target_dump" "$target_checksum" "$target_metadata")
+object_names=("$remote_dump_key" "$remote_checksum_key" "$remote_metadata_key")
+for index in "${!artifacts[@]}"; do
+  artifact="${artifacts[index]}"
+  object_name="${object_names[index]}"
+  attempted_names+=("$object_name")
   if ! oci os object put \
     --auth instance_principal \
     --bucket-name "$OCI_BACKUP_BUCKET" \
     --name "$object_name" \
-    --file "$artifact" \
-    --force >/dev/null; then
+    --file "$artifact" >/dev/null; then
     echo "OCI upload failed for $object_name; rolling back uploaded objects" >&2
     if ! rollback_uploaded; then
       echo 'OCI upload rollback incomplete; manual object cleanup is required' >&2
     fi
     exit 1
   fi
-  uploaded_names+=("$object_name")
 done
 
 find "$BACKUP_DIR" -type f -name 'overtime-*.dump*' -mtime +2 -delete

@@ -49,11 +49,14 @@ case "$operation" in
     put_count="$(cat "$OCI_PUT_COUNT" 2>/dev/null || printf 0)"
     put_count="$((put_count + 1))"
     printf '%s\n' "$put_count" > "$OCI_PUT_COUNT"
-    if [[ -n "${FAIL_OCI_CALL:-}" && "$put_count" == "$FAIL_OCI_CALL" ]]; then
+    if [[ -n "${FAIL_OCI_CALL:-}" && "$put_count" == "$FAIL_OCI_CALL" && "${AMBIGUOUS_OCI_FAILURE:-0}" != 1 ]]; then
       exit 43
     fi
     mkdir -p "$OCI_REMOTE_DIR/$(dirname "$object_name")"
     /bin/cp "$source_file" "$OCI_REMOTE_DIR/$object_name"
+    if [[ -n "${FAIL_OCI_CALL:-}" && "$put_count" == "$FAIL_OCI_CALL" ]]; then
+      exit 43
+    fi
     ;;
   delete)
     if [[ "${FAIL_OCI_DELETE:-0}" == 1 ]]; then
@@ -91,6 +94,7 @@ common_env=(
   COMPOSE_FILE="$tmp/compose.yaml"
   POSTGRES_BACKUP_PASSWORD="$password"
   OCI_BACKUP_BUCKET=aims-overtime-backups
+  RUN_ID=0123456789abcdef
 )
 touch "$tmp/compose.env" "$tmp/compose.yaml"
 
@@ -134,6 +138,13 @@ if run_backup "$tmp/publication-failure" \
 fi
 test -z "$(find "$tmp/publication-failure" -maxdepth 1 -type f -name 'overtime-*' -print)"
 
+# A caller-supplied run ID must be a cryptographic-identifier-shaped hex value.
+if run_backup "$tmp/invalid-run-id" RUN_ID=not-hex "$root/docker/postgres-backup.sh" \
+  >"$tmp/invalid-run-id.stdout" 2>"$tmp/invalid-run-id.stderr"; then
+  echo 'backup unexpectedly accepted an invalid run ID' >&2
+  exit 1
+fi
+
 # A same-timestamp retry cannot overwrite a previously committed valid set.
 mkdir -p "$tmp/timestamp-collision"
 for suffix in dump dump.sha256 metadata; do
@@ -176,6 +187,10 @@ test -z "$(find "$tmp/success" -maxdepth 1 -type f -name '*.tmp*' -print)"
 grep -Fx "archive=$(basename "$dump")" "$metadata" >/dev/null
 grep -E '^timestamp_utc=[0-9]{8}T[0-9]{6}Z$' "$metadata" >/dev/null
 grep -Fx 'postgres_version=17.10' "$metadata" >/dev/null
+grep -Fx 'run_id=0123456789abcdef' "$metadata" >/dev/null
+grep -Fx 'remote_dump_key=postgres/overtime-20260720T000000Z-0123456789abcdef.dump' "$metadata" >/dev/null
+grep -Fx 'remote_checksum_key=postgres/overtime-20260720T000000Z-0123456789abcdef.dump.sha256' "$metadata" >/dev/null
+grep -Fx 'remote_metadata_key=postgres/overtime-20260720T000000Z-0123456789abcdef.metadata' "$metadata" >/dev/null
 
 test "$(wc -l < "$tmp/oci.log" | tr -d ' ')" = 3
 while IFS= read -r call; do
@@ -183,15 +198,19 @@ while IFS= read -r call; do
   grep -F -- '--bucket-name aims-overtime-backups' <<<"$call" >/dev/null
   grep -F -- '--name postgres/overtime-' <<<"$call" >/dev/null
   grep -F -- '--file ' <<<"$call" >/dev/null
-  grep -F -- '--force' <<<"$call" >/dev/null
+  grep -E -- '--name postgres/overtime-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{16}\.(dump|dump\.sha256|metadata)' <<<"$call" >/dev/null
 done < "$tmp/oci.log"
+if grep -F -- '--force' "$tmp/oci.log"; then
+  echo 'OCI uploads unexpectedly allow overwriting a persistent object key' >&2
+  exit 1
+fi
 grep -F -- '.dump ' "$tmp/oci.log" >/dev/null
 grep -F -- '.dump.sha256 ' "$tmp/oci.log" >/dev/null
 grep -F -- '.metadata ' "$tmp/oci.log" >/dev/null
 grep '^os object put ' "$tmp/oci.log" | tail -1 | grep -F -- '.metadata ' >/dev/null
-test -f "$tmp/remote/postgres/$(basename "$dump")"
-test -f "$tmp/remote/postgres/$(basename "$checksum")"
-test -f "$tmp/remote/postgres/$(basename "$metadata")"
+test -f "$tmp/remote/postgres/overtime-20260720T000000Z-0123456789abcdef.dump"
+test -f "$tmp/remote/postgres/overtime-20260720T000000Z-0123456789abcdef.dump.sha256"
+test -f "$tmp/remote/postgres/overtime-20260720T000000Z-0123456789abcdef.metadata"
 grep -F -- '-type f -name overtime-*.dump* -mtime +2 -delete' "$tmp/find.log" >/dev/null
 grep -F -- '-type f -name overtime-*.metadata -mtime +2 -delete' "$tmp/find.log" >/dev/null
 
@@ -200,7 +219,7 @@ if grep -F -- "$password" "$tmp/success.stdout" "$tmp/success.stderr"; then
   exit 1
 fi
 
-# A partial OCI failure rolls back every successful put and never runs cleanup.
+# A partial OCI failure reconciles the failed key and every prior key.
 for failed_put in 2 3; do
   case_dir="$tmp/upload-failure-$failed_put"
   mkdir -p "$case_dir"
@@ -212,15 +231,27 @@ for failed_put in 2 3; do
   : > "$tmp/oci-put-count"
   : > "$tmp/find.log"
   rm -rf "$tmp/remote"
+  mkdir -p "$tmp/remote/postgres"
+  for suffix in dump dump.sha256 metadata; do
+    printf 'preexisting-complete\n' > "$tmp/remote/postgres/overtime-20260719T000000Z-fedcba9876543210.$suffix"
+  done
+  ambiguous_failure=0
+  if [[ "$failed_put" == 3 ]]; then
+    ambiguous_failure=1
+  fi
   if run_backup "$case_dir" \
-    FAIL_OCI_CALL="$failed_put" "$root/docker/postgres-backup-oci.sh" \
+    FAIL_OCI_CALL="$failed_put" AMBIGUOUS_OCI_FAILURE="$ambiguous_failure" \
+    "$root/docker/postgres-backup-oci.sh" \
     >"$case_dir.stdout" 2>"$case_dir.stderr"; then
     echo "backup unexpectedly succeeded when OCI put $failed_put failed" >&2
     exit 1
   fi
   test ! -s "$tmp/find.log"
-  test "$(grep -c '^os object delete ' "$tmp/oci.log")" = "$((failed_put - 1))"
-  test -z "$(find "$tmp/remote" -type f -print 2>/dev/null || true)"
+  test "$(grep -c '^os object delete ' "$tmp/oci.log")" = "$failed_put"
+  test -z "$(find "$tmp/remote" -type f -name '*-0123456789abcdef.*' -print)"
+  for suffix in dump dump.sha256 metadata; do
+    test "$(cat "$tmp/remote/postgres/overtime-20260719T000000Z-fedcba9876543210.$suffix")" = 'preexisting-complete'
+  done
   for suffix in dump dump.sha256 metadata; do
     test "$(cat "$case_dir/overtime-20260717T000000Z.$suffix")" = 'previous-valid'
   done

@@ -7,7 +7,8 @@ Usage: POSTGRES_BACKUP_PASSWORD=secret ./docker/postgres-backup.sh
 
 Creates a validated PostgreSQL custom-format archive and its checksum and
 metadata. COMPOSE_ENV_FILE, COMPOSE_FILE, and BACKUP_DIR may override the
-/opt/overtime defaults.
+/opt/overtime defaults. A backup set is committed only by its .metadata file;
+consumers must enumerate markers and validate their referenced payloads.
 EOF
   exit 0
 fi
@@ -20,6 +21,11 @@ BACKUP_DIR="${BACKUP_DIR:-/data/overtime/postgres-backups}"
 
 mkdir -p "$BACKUP_DIR"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_ID="${RUN_ID:-$(openssl rand -hex 8)}"
+if [[ ! "$RUN_ID" =~ ^[0-9a-f]{16}$ ]]; then
+  echo 'RUN_ID must be exactly 16 lowercase hexadecimal characters' >&2
+  exit 1
+fi
 archive="overtime-$timestamp.dump"
 target_dump="$BACKUP_DIR/$archive"
 target_checksum="$target_dump.sha256"
@@ -70,8 +76,10 @@ fi
 
 checksum_value="$(sha256sum "$temporary_dump" | awk '{print $1}')"
 printf '%s  %s\n' "$checksum_value" "$archive" > "$temporary_checksum"
-printf 'timestamp_utc=%s\npostgres_version=%s\narchive=%s\n' \
-  "$timestamp" "$postgres_major_minor" "$archive" > "$temporary_metadata"
+remote_prefix="postgres/overtime-$timestamp-$RUN_ID"
+printf 'timestamp_utc=%s\npostgres_version=%s\narchive=%s\nrun_id=%s\nremote_dump_key=%s.dump\nremote_checksum_key=%s.dump.sha256\nremote_metadata_key=%s.metadata\n' \
+  "$timestamp" "$postgres_major_minor" "$archive" "$RUN_ID" \
+  "$remote_prefix" "$remote_prefix" "$remote_prefix" > "$temporary_metadata"
 chmod 600 "$temporary_dump" "$temporary_checksum" "$temporary_metadata"
 
 publication_started=1
