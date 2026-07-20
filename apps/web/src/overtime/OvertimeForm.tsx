@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, friendlyError } from '../api/http'
 import type { OvertimeFormValues, OvertimeRecord } from '../api/types'
+import { DatePicker } from '../ui/DatePicker'
+import { Icon } from '../ui/Icon'
 import { THIRTY_MINUTE_TIME_OPTIONS } from './time-options'
 import { formatMinutes, previewTime } from './time-preview'
 
@@ -80,16 +82,14 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
 
   return (
     <form className="record-form" onSubmit={submit}>
-      <label className="field field-wide">
+      <div className="field field-wide">
         <span>근무 날짜</span>
-        <input
-          className="work-date-input"
-          type="date"
+        <DatePicker
+          label="근무 날짜"
           value={values.workDate}
-          onChange={(event) => update('workDate', event.target.value)}
-          required
+          onChange={(value) => update('workDate', value)}
         />
-      </label>
+      </div>
 
       <div className="time-fields">
         <label className="field">
@@ -104,7 +104,9 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
             ))}
           </select>
         </label>
-        <span className="time-arrow" aria-hidden="true">→</span>
+        <span className="time-arrow" aria-hidden="true">
+          <Icon name="chevron-right" size={18} />
+        </span>
         <label className="field">
           <span>종료 시간</span>
           <select

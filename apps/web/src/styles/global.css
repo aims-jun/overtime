@@ -198,18 +198,12 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 .field input, .field select, .admin-filters select { min-height: 48px; padding: 0 14px; }
-.work-date-input {
-  display: block;
-  inline-size: 100%;
-  min-inline-size: 0;
-  max-inline-size: 100%;
-  overflow: hidden;
-}
 .field textarea { padding: 13px 14px; resize: vertical; line-height: 1.55; }
 .field input:focus, .field textarea:focus, .field select:focus,
 .admin-filters select:focus { border-color: #78921f; box-shadow: 0 0 0 3px rgba(216, 255, 69, .38); }
 .time-fields { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); align-items: end; gap: 12px; }
-.time-arrow { height: 48px; display: grid; place-items: center; color: #899087; }
+.time-arrow { height: 48px; display: grid; place-items: center; align-self: end; line-height: 0; color: #899087; }
+.time-arrow svg { display: block; }
 .time-preview {
   padding: 14px 16px;
   display: flex;
@@ -632,7 +626,7 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
   .summary-panel { grid-template-columns: 1fr; }
   .monthly-total { width: 100%; }
   .time-fields { grid-template-columns: 1fr; }
-  .time-arrow { height: 16px; transform: rotate(90deg); }
+  .time-arrow { width: 100%; height: 18px; align-self: center; transform: rotate(90deg); }
   .admin-title { flex-direction: column; }
   .csv-button { width: 100%; }
 }

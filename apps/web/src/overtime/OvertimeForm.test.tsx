@@ -71,12 +71,38 @@ const record = {
 }
 
 describe('OvertimeForm', () => {
-  it('contains the native work date input inside its field on mobile', () => {
-    render(<OvertimeForm onSaved={vi.fn()} />)
+  it('uses the custom work date picker and submits its date', async () => {
+    let submittedBody: unknown
+    server.use(
+      http.patch('/api/overtime/record-1', async ({ request }) => {
+        submittedBody = await request.json()
+        return HttpResponse.json({ ...record, workDate: '2026-07-21' })
+      }),
+    )
+    const user = userEvent.setup()
+    render(
+      <OvertimeForm record={record} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    )
 
-    expect(screen.getByLabelText('근무 날짜')).toHaveClass('work-date-input')
+    expect(document.querySelector('input[type="date"]')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '근무 날짜' }))
+    await user.click(
+      screen.getByRole('button', { name: '2026년 7월 21일 선택' }),
+    )
+    await user.click(screen.getByRole('button', { name: '수정하기' }))
+
+    expect(submittedBody).toMatchObject({ workDate: '2026-07-21' })
+  })
+
+  it('uses a centered svg icon between the time fields', () => {
+    const { container } = render(<OvertimeForm onSaved={vi.fn()} />)
+    const arrow = container.querySelector('.time-arrow')
+
+    expect(arrow?.querySelector('svg')).toBeInTheDocument()
+    expect(arrow).not.toHaveTextContent('→')
     expect(globalStyles).toMatch(
-      /\.work-date-input \{[\s\S]*display: block;[\s\S]*inline-size: 100%;[\s\S]*min-inline-size: 0;[\s\S]*max-inline-size: 100%;[\s\S]*overflow: hidden;[\s\S]*\}/,
+      /\.time-arrow \{[^}]*height: 48px;[^}]*place-items: center;[^}]*line-height: 0;/,
     )
   })
 
