@@ -29,6 +29,11 @@ archive_list_line="$(require_line 'pg_restore --list' 'actual restore must valid
 stop_line="$(require_line 'stop api' 'actual restore must stop the API only after validation')"
 createdb_line="$(require_line 'createdb .*\$RESTORE_DATABASE' 'actual restore must create a fresh target database')"
 restore_line="$(require_line 'pg_restore --exit-on-error .*\$RESTORE_DATABASE' 'actual restore must restore into the fresh target database')"
+grant_runtime_line="$(require_line 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES.*overtime_app' 'actual restore must grant runtime access to restored tables')"
+grant_backup_line="$(require_line 'GRANT SELECT ON ALL TABLES.*overtime_backup' 'actual restore must grant backup access to restored tables')"
+role_check_line="$(require_line 'SET ROLE overtime_app' 'actual restore must verify runtime privileges through SET ROLE')"
+backup_check_line="$(require_line 'SET ROLE overtime_backup' 'actual restore must verify backup privileges through SET ROLE')"
+switch_line="$(require_line 'env.production.next' 'actual restore must verify privileges before switching API configuration')"
 
 if [[ "$checksum_line" -ge "$stop_line" || "$archive_list_line" -ge "$stop_line" ]]; then
   echo 'actual restore must validate checksum and pg_restore list before stopping the API' >&2
@@ -37,6 +42,29 @@ fi
 
 if [[ "$createdb_line" -ge "$restore_line" ]]; then
   echo 'actual restore must create the fresh target database before restoring' >&2
+  exit 1
+fi
+
+if [[ "$grant_runtime_line" -le "$restore_line" || "$grant_backup_line" -le "$restore_line" \
+  || "$role_check_line" -le "$grant_runtime_line" || "$backup_check_line" -le "$grant_backup_line" \
+  || "$role_check_line" -ge "$switch_line" || "$backup_check_line" -ge "$switch_line" ]]; then
+  echo 'actual restore must grant and verify runtime/backup privileges before API switch' >&2
+  exit 1
+fi
+
+if ! printf '%s\n' "$actual_restore" | grep -q 'ALTER DEFAULT PRIVILEGES.*overtime_app' \
+  || ! printf '%s\n' "$actual_restore" | grep -q 'ALTER DEFAULT PRIVILEGES.*overtime_backup' \
+  || ! printf '%s\n' "$actual_restore" | grep -q 'ROLLBACK'; then
+  echo 'actual restore must set future grants and roll back its runtime DML privilege probe' >&2
+  exit 1
+fi
+
+mode_line="$(require_line 'stat -c.*env.production.*600' 'actual restore must require mode 0600 production env')"
+source_prod_line="$(require_line '^ *\. /opt/overtime/\.env.production' 'actual restore must load the trusted production env')"
+source_backup_line="$(require_line '^ *\. /opt/overtime/\.env.backup' 'actual restore must load the trusted backup env')"
+set_u_line="$(require_line 'set -.*u' 'actual restore must enable nounset after loading trusted env files')"
+if [[ "$mode_line" -ge "$set_u_line" || "$source_prod_line" -ge "$set_u_line" || "$source_backup_line" -ge "$set_u_line" ]]; then
+  echo 'actual restore must validate and load trusted env files before nounset use' >&2
   exit 1
 fi
 
@@ -64,6 +92,27 @@ fi
 if grep -Fq 'dropdb overtime' "$runbook" \
   || grep -Fq 'DROP DATABASE overtime' "$runbook"; then
   echo 'runbook must never contain a command that drops the production database' >&2
+  exit 1
+fi
+
+backup_runbook="$root/docs/runbooks/backup-restore.md"
+if ! grep -Eq '(^| )\. /opt/overtime/\.env.backup|OCI_BACKUP_BUCKET=' "$backup_runbook"; then
+  echo 'remote restore drill must load backup environment or supply the OCI bucket' >&2
+  exit 1
+fi
+
+if ! grep -q 'manual remote marker drill' "$runbook" \
+  || ! grep -q 'RESTORE_METADATA_OBJECT=' "$runbook" \
+  || ! grep -q 'OCI_BACKUP_BUCKET' "$runbook"; then
+  echo 'Oracle acceptance must require recorded manual remote marker drill evidence' >&2
+  exit 1
+fi
+
+gcp_runbook="$root/docs/runbooks/gcp-deployment.md"
+if ! grep -q 'ARCHIVED / UNSUPPORTED' "$gcp_runbook" \
+  || grep -q 'docker compose .*up' "$gcp_runbook" \
+  || grep -q '마이그레이션이 자동 실행' "$gcp_runbook"; then
+  echo 'GCP runbook must be archived and contain no active stale deployment commands' >&2
   exit 1
 fi
 

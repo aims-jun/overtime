@@ -101,7 +101,9 @@ for index in "${!artifacts[@]}"; do
   fi
 done
 
-find "$BACKUP_DIR" -type f -name 'overtime-*.dump*' -mtime +2 -delete
-find "$BACKUP_DIR" -type f -name 'overtime-*.metadata' -mtime +2 -delete
+# GNU find rounds -mtime down to completed 24-hour periods. +1 therefore
+# removes files after two completed periods (48 hours); +2 would retain 72h.
+find "$BACKUP_DIR" -type f -name 'overtime-*.dump*' -mtime +1 -delete
+find "$BACKUP_DIR" -type f -name 'overtime-*.metadata' -mtime +1 -delete
 
 printf '%s\n' "$target_dump"

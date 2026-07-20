@@ -231,8 +231,8 @@ grep '^os object put ' "$tmp/oci.log" | tail -1 | grep -F -- '.metadata ' >/dev/
 test -f "$tmp/remote/postgres/overtime-20260720T000000Z-0123456789abcdef.dump"
 test -f "$tmp/remote/postgres/overtime-20260720T000000Z-0123456789abcdef.dump.sha256"
 test -f "$tmp/remote/postgres/overtime-20260720T000000Z-0123456789abcdef.metadata"
-grep -F -- '-type f -name overtime-*.dump* -mtime +2 -delete' "$tmp/find.log" >/dev/null
-grep -F -- '-type f -name overtime-*.metadata -mtime +2 -delete' "$tmp/find.log" >/dev/null
+grep -F -- '-type f -name overtime-*.dump* -mtime +1 -delete' "$tmp/find.log" >/dev/null
+grep -F -- '-type f -name overtime-*.metadata -mtime +1 -delete' "$tmp/find.log" >/dev/null
 
 if grep -F -- "$password" "$tmp/success.stdout" "$tmp/success.stderr"; then
   echo 'backup password leaked to stdout/stderr' >&2

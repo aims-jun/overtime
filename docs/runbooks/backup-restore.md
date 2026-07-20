@@ -22,7 +22,7 @@ sudo systemctl show overtime-backup.service -p Result -p ExecMainStatus
 sudo journalctl -u overtime-backup.service --since today --no-pager
 ```
 
-`Result=success`와 `ExecMainStatus=0`을 모두 확인한다. OCI bucket은 private으로 유지하고 `postgres/` prefix의 객체를 30일 후 삭제하는 lifecycle rule을 설정한다. 서버의 `/data/overtime/postgres-backups`에서는 2일이 지난 `.dump`, `.dump.sha256`, `.metadata`를 script가 정리한다. OCI lifecycle은 local retention을 대신하지 않는다.
+`Result=success`와 `ExecMainStatus=0`을 모두 확인한다. OCI bucket은 private으로 유지하고 `postgres/` prefix의 객체를 30일 후 삭제하는 lifecycle rule을 설정한다. 서버의 `/data/overtime/postgres-backups`에서는 완료된 24시간 두 구간(48시간)이 지난 `.dump`, `.dump.sha256`, `.metadata`를 script가 `find -mtime +1`로 정리한다. OCI lifecycle은 local retention을 대신하지 않는다.
 
 ## 3. 주간 복구 훈련
 
@@ -38,17 +38,24 @@ sudo journalctl -u overtime-restore-drill.service --since today --no-pager
 수동으로 특정 OCI set를 훈련할 때는 목록에 실제로 있는 exact marker key를 사용한다.
 
 ```bash
-sudo env \
-  RESTORE_METADATA_OBJECT='postgres/overtime-<UTC>-<16-hex-run-id>.metadata' \
-  RESTORE_DATABASE="overtime_restore_drill_$(date -u +%Y%m%d%H%M%S)" \
+(
+  set -eo pipefail
+  test "$(stat -c %a /opt/overtime/.env.backup)" = 600
+  set -a
+  . /opt/overtime/.env.backup
+  set +a
+  set -u
+  export RESTORE_METADATA_OBJECT='postgres/overtime-<UTC>-<16-hex-run-id>.metadata'
+  export RESTORE_DATABASE="overtime_restore_drill_$(date -u +%Y%m%d%H%M%S)"
   /opt/overtime/docker/postgres-restore-drill.sh
+)
 ```
 
 script는 marker 참조, checksum, `pg_restore --list`, migration version, users/records count, orphan FK, 기본 집계를 검증하고 EXIT trap에서 자기가 생성한 임시 DB만 정리한다. journal의 marker key, 시각, count, 결과를 운영 기록에 남긴다.
 
 ## 4. 수동 복구 원칙
 
-- 일반 수동 복구는 `RESTORE_DATABASE=ovetime_restore_...`가 아닌 `overtime_restore_<14 UTC digits>` 형식의 새 staging DB만 허용하며 `CONFIRM_RESTORE=YES`를 요구한다.
+- 일반 수동 복구는 `overtime_restore_<14 UTC digits>` 형식의 새 staging DB만 허용하며 `CONFIRM_RESTORE=YES`를 요구한다.
 - checksum과 `pg_restore --list`를 DB 생성 전에 통과시키고, `createdb`로 fresh target을 만든 다음에만 restore한다.
 - production recovery는 [Oracle 배포 실행서](oracle-deployment.md#82-실제-장애-복구)의 별도 절차다. 현재 DB를 overwrite하지 않고, 현재 상태의 fresh backup 성공과 운영자의 명시적 확인 없이는 시작하지 않는다.
 - 장애 원인 분석을 위해 실패한 fresh target은 자동 삭제하지 않는다. 정리는 사후 변경 승인을 받아 target 이름을 다시 확인한 뒤 수행한다.

@@ -134,7 +134,7 @@ sudo systemctl show overtime-restore-drill.service -p Result -p ExecMainStatus
 sudo journalctl -u overtime-backup.service -u overtime-restore-drill.service --since today --no-pager
 ```
 
-백업 성공 증거는 marker가 참조하는 exact `.dump`, `.dump.sha256`, `.metadata` 세 key, `Result=success`, `ExecMainStatus=0`이다. 복구 성공 증거는 temporary DB의 migration/count/FK/집계 통과와 EXIT cleanup journal이다. 이 두 증거를 보존한 뒤에만 timer를 켠다.
+백업 성공 증거는 marker가 참조하는 exact `.dump`, `.dump.sha256`, `.metadata` 세 key, `Result=success`, `ExecMainStatus=0`이다. systemd restore service의 기본값은 local marker drill이므로 OCI 복구 증거가 아니다. Oracle acceptance는 `.env.backup`을 로드한 뒤 `RESTORE_METADATA_OBJECT=<exact remote marker>`를 지정한 manual remote marker drill을 별도로 실행하고 bucket, marker key, temporary DB, migration/count/FK/집계 통과, EXIT cleanup을 기록해야 한다. 이 두 증거를 보존한 뒤에만 timer를 켠다.
 
 ```bash
 sudo systemctl enable --now overtime-backup.timer overtime-restore-drill.timer
@@ -172,7 +172,15 @@ test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" 
 
 ```bash
 (
-  set -euo pipefail
+  set -eo pipefail
+  test "$(stat -c %a /opt/overtime/.env.production)" = 600
+  test "$(stat -c %a /opt/overtime/.env.backup)" = 600
+  set -a
+  . /opt/overtime/.env.production
+  . /opt/overtime/.env.backup
+  set +a
+  set -u
+  cd /opt/overtime
   read -r -p '정확한 OCI metadata key: ' RESTORE_METADATA_OBJECT
   read -r -p '새 target DB (overtime_restore_YYYYMMDDhhmmss): ' RESTORE_DATABASE
   read -r -p '복구 확인 (YES): ' CONFIRM_RESTORE
@@ -218,6 +226,10 @@ test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" 
   API_STOPPED=1
   docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'exec createdb --username "$POSTGRES_USER" --owner overtime_migrator "$1"' sh "$RESTORE_DATABASE"
   docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'export PGPASSWORD="$POSTGRES_MIGRATION_PASSWORD"; exec pg_restore --exit-on-error --no-owner --no-acl --username overtime_migrator --dbname "$1"' sh "$RESTORE_DATABASE" < "$ARCHIVE"
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='GRANT USAGE ON SCHEMA public TO overtime_app, overtime_backup; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO overtime_app; GRANT SELECT ON ALL TABLES IN SCHEMA public TO overtime_backup;'
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO overtime_app; ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT ON TABLES TO overtime_backup;'
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command="BEGIN; SET ROLE overtime_app; SELECT COUNT(*) FROM users; INSERT INTO users (id, google_subject, email, name, last_login_at) SELECT '00000000-0000-0000-0000-000000000000'::uuid, 'privilege-probe', 'probe@example.invalid', 'probe', now() WHERE false; UPDATE users SET name = name WHERE false; DELETE FROM users WHERE false; ROLLBACK;"
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='BEGIN; SET ROLE overtime_backup; SELECT COUNT(*) FROM users; ROLLBACK;'
   COUNTS="$(docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --tuples-only --no-align --command='SELECT (SELECT COUNT(*) FROM users) || '\''|'\'' || (SELECT COUNT(*) FROM overtime_records);' | tr -d '[:space:]')"
   test "$COUNTS" = "$USERS_COUNT|$RECORDS_COUNT"
 
@@ -240,7 +252,7 @@ test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" 
 ## 9. 월별 점검
 
 - OCI 실제 비용, Always Free 자격, 볼륨·Object Storage 사용량
-- backup 6시간 timer, 최근 marker set, 30일 lifecycle, local 2일 retention
+- backup 6시간 timer, 최근 marker set, 30일 lifecycle, local 48시간 retention
 - 주간 temporary restore journal과 정리 성공
 - `/data/postgres` 용량·소유권, memory, container restart, host 5432 비노출
 - API health, 로그인, 관리자 집계/CSV
