@@ -30,6 +30,7 @@ export function OvertimePage() {
     placeholderData: keepPreviousData,
     retry: false,
   })
+  const displayedMonth = query.data?.month ?? month
 
   const refresh = async () => {
     setEditing(null)
@@ -57,12 +58,12 @@ export function OvertimePage() {
       <section className="summary-panel">
         <div className="summary-heading">
           <span className="eyebrow">
-            AIMS · {Number((query.data?.month ?? month).slice(5))}월
+            AIMS · {Number(displayedMonth.slice(5))}월
           </span>
           <h1>업무 연장 내역</h1>
         </div>
         <div className="monthly-total" aria-label="선택한 달 업무 연장 합계">
-          <span>{month.slice(5)}월 업무 연장</span>
+          <span>{Number(displayedMonth.slice(5))}월 업무 연장</span>
           <strong>{formatMinutes(query.data?.totalMinutes ?? 0)}</strong>
         </div>
       </section>

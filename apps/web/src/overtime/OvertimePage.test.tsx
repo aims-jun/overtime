@@ -106,6 +106,11 @@ describe('OvertimePage', () => {
     })
 
     expect(screen.getByText('배포 대응')).toBeInTheDocument()
+    expect(
+      within(screen.getByLabelText('선택한 달 업무 연장 합계')).getByText(
+        '7월 업무 연장',
+      ),
+    ).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '다른 달 내역을 불러오는 중' }))
       .toBeInTheDocument()
   })
