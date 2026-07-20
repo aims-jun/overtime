@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, friendlyError } from '../api/http'
 import type { MonthlyOvertime, OvertimeRecord } from '../api/types'
@@ -16,16 +16,6 @@ function currentMonth(): string {
   }).format(new Date())
 }
 
-function monthName(value: string): string {
-  const [year, month] = value.split('-').map(Number)
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'long',
-    timeZone: 'UTC',
-  })
-    .format(new Date(Date.UTC(year, month - 1, 1)))
-    .toUpperCase()
-}
-
 export function OvertimePage() {
   const [month, setMonth] = useState(currentMonth)
   const [editing, setEditing] = useState<OvertimeRecord | null>(null)
@@ -37,6 +27,7 @@ export function OvertimePage() {
   const query = useQuery({
     queryKey: ['overtime', month],
     queryFn: () => api<MonthlyOvertime>(`/api/overtime?month=${month}`),
+    placeholderData: keepPreviousData,
     retry: false,
   })
 
@@ -66,7 +57,7 @@ export function OvertimePage() {
       <section className="summary-panel">
         <div className="summary-heading">
           <span className="eyebrow">
-            WORK LOG · {monthName(query.data?.month ?? month)}
+            AIMS · {Number((query.data?.month ?? month).slice(5))}월
           </span>
           <h1>업무 연장 내역</h1>
         </div>
@@ -102,7 +93,7 @@ export function OvertimePage() {
       <section className="history-section">
         <div className="history-heading">
           <div>
-            <span className="eyebrow">WORK LOG</span>
+            <span className="eyebrow">업무 기록</span>
             <h2>최근 내역</h2>
           </div>
           <label className="month-picker">
@@ -116,9 +107,14 @@ export function OvertimePage() {
         </div>
 
         {query.isPending ? (
-          <div className="status-skeleton" aria-label="불러오는 중">
+          <div className="status-skeleton" role="status" aria-label="불러오는 중">
             <span /><span /><span />
           </div>
+        ) : null}
+        {query.isFetching && !query.isPending ? (
+          <p className="refresh-status" role="status" aria-label="다른 달 내역을 불러오는 중">
+            내역을 새로 불러오는 중…
+          </p>
         ) : null}
         {query.isError ? (
           <div className="status-card error-card" role="alert">

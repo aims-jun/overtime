@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { HttpResponse, http } from 'msw'
@@ -76,13 +76,38 @@ describe('OvertimePage', () => {
     renderPage()
 
     expect(await screen.findByText('배포 대응')).toBeInTheDocument()
-    expect(screen.getByText('WORK LOG · JULY')).toBeInTheDocument()
+    expect(screen.getByText('AIMS · 7월')).toBeInTheDocument()
+    expect(screen.queryByText(/WORK LOG/)).not.toBeInTheDocument()
     expect(
       within(screen.getByLabelText('선택한 달 업무 연장 합계')).getByText(
         '2시간 30분',
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('22:30 – 다음 날 01:00')).toBeInTheDocument()
+  })
+
+  it('keeps the current records visible while another month is loading', async () => {
+    server.use(
+      http.get('/api/overtime', ({ request }) => {
+        const month = new URL(request.url).searchParams.get('month')
+        if (month === '2026-06') return new Promise(() => undefined)
+        return HttpResponse.json({
+          month,
+          totalMinutes: 150,
+          records: [record],
+        })
+      }),
+    )
+    renderPage()
+
+    expect(await screen.findByText('배포 대응')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('조회 월'), {
+      target: { value: '2026-06' },
+    })
+
+    expect(screen.getByText('배포 대응')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: '다른 달 내역을 불러오는 중' }))
+      .toBeInTheDocument()
   })
 
   it('opens registration in a dialog without inserting an inline form', async () => {

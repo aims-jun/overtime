@@ -8,6 +8,7 @@
   --ink-soft: #29352a;
   --lime: #d8ff45;
   --lime-hover: #c9ef36;
+  --lime-soft: #efffc0;
   --surface: #fff;
   --background: #f2f4f6;
   --muted: #6b7684;
@@ -266,6 +267,13 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 }
 .status-skeleton span:first-child { width: 36%; height: 22px; }
 .status-skeleton span:last-child { width: 72%; }
+.refresh-status {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+.compact-error { margin-bottom: 18px; padding: 18px 20px; }
 .empty-state > span {
   width: 40px; height: 40px; margin: 0 auto 14px;
   display: grid; place-items: center;
@@ -354,8 +362,8 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .admin-summary > div { margin: 0; padding: 22px; background: var(--surface); }
 .admin-summary span { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
 .admin-summary strong { font-size: 27px; letter-spacing: -.04em; }
-.summary-total { color: #f6ffe3; background: var(--ink) !important; }
-.summary-total span { color: #c5d2c2; }
+.summary-total { color: var(--ink); background: var(--lime-soft) !important; }
+.summary-total span { color: #566057; }
 .person-totals { margin: 0; padding: 0; list-style: none; }
 .person-totals li { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .person-totals li + li { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }

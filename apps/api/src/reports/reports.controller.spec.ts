@@ -1,3 +1,4 @@
+import { StreamableFile } from '@nestjs/common';
 import type { Response } from 'express';
 import { ReportsController } from './reports.controller';
 import type { ReportsService } from './reports.service';
@@ -33,6 +34,6 @@ describe('ReportsController', () => {
       'Content-Disposition',
       'attachment; filename="aims-overtime-2026-07.xlsx"',
     );
-    expect(result).toBe(buffer);
+    expect(result).toBeInstanceOf(StreamableFile);
   });
 });

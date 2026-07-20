@@ -1,4 +1,11 @@
-import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Res,
+  StreamableFile,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { SessionGuard } from '../auth/session.guard';
 import { AdminGuard } from '../common/admin.guard';
@@ -32,7 +39,7 @@ export class ReportsController {
     @Query('month') month: string,
     @Query('userId') userId: string | undefined,
     @Res({ passthrough: true }) response: Response,
-  ): Promise<Buffer> {
+  ): Promise<StreamableFile> {
     const query: MonthlyReportQuery = { month, userId };
     const excel = await this.reports.excel(query);
     response.setHeader(
@@ -43,6 +50,6 @@ export class ReportsController {
       'Content-Disposition',
       `attachment; filename="aims-overtime-${month}.xlsx"`,
     );
-    return excel;
+    return new StreamableFile(excel);
   }
 }

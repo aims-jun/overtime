@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { api, friendlyError } from '../api/http'
 import type { AdminReport, AdminUser } from '../api/types'
@@ -32,6 +32,7 @@ export function AdminPage() {
       if (userId) query.set('userId', userId)
       return api<AdminReport>(`/api/admin/reports?${query.toString()}`)
     },
+    placeholderData: keepPreviousData,
     retry: false,
   })
 
@@ -54,10 +55,23 @@ export function AdminPage() {
           setParams(query)
         }}
       />
+      {users.isError ? (
+        <div className="status-card error-card compact-error" role="alert">
+          <p>직원 목록을 불러오지 못했습니다.</p>
+          <button type="button" onClick={() => users.refetch()}>
+            직원 목록 다시 불러오기
+          </button>
+        </div>
+      ) : null}
       {report.isPending ? (
-        <div className="status-skeleton" aria-label="불러오는 중">
+        <div className="status-skeleton" role="status" aria-label="불러오는 중">
           <span /><span /><span />
         </div>
+      ) : null}
+      {report.isFetching && !report.isPending ? (
+        <p className="refresh-status" role="status" aria-label="보고서를 새로 불러오는 중">
+          보고서를 새로 불러오는 중…
+        </p>
       ) : null}
       {report.isError ? (
         <div className="status-card error-card" role="alert">
