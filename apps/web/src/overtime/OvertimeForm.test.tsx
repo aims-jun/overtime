@@ -56,9 +56,23 @@ const EXPECTED_TIME_OPTIONS = [
   '23:30',
 ]
 
+const record = {
+  id: 'record-1',
+  workDate: '2026-07-13',
+  startTime: '22:30',
+  endTime: '01:00',
+  durationMinutes: 150,
+  reason: '배포 대응',
+  createdAt: '2026-07-13T00:00:00.000Z',
+  updatedAt: '2026-07-13T00:00:00.000Z',
+}
+
 describe('OvertimeForm', () => {
   it('offers start and end times in 30-minute increments', () => {
     render(<OvertimeForm onSaved={vi.fn()} />)
+
+    expect(screen.queryByText('NEW WORK LOG')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '저장하기' })).toBeInTheDocument()
 
     for (const label of ['시작 시간', '종료 시간']) {
       const select = screen.getByLabelText(label)
@@ -83,7 +97,7 @@ describe('OvertimeForm', () => {
     render(<OvertimeForm onSaved={vi.fn()} />)
 
     await user.type(screen.getByLabelText('업무 내용'), '배포 대응')
-    await user.click(screen.getByRole('button', { name: '저장' }))
+    await user.click(screen.getByRole('button', { name: '저장하기' }))
 
     expect(screen.getByLabelText('업무 내용')).toHaveValue('배포 대응')
     expect(screen.getByRole('alert')).toHaveTextContent(
@@ -100,5 +114,15 @@ describe('OvertimeForm', () => {
 
     expect(screen.getByText('추가 근무 시간 2시간 30분')).toBeInTheDocument()
     expect(screen.getByText('종료 시간은 다음 날입니다')).toBeInTheDocument()
+  })
+
+  it('uses edit and cancel copy without a duplicated eyebrow', () => {
+    render(
+      <OvertimeForm record={record} onSaved={vi.fn()} onCancel={vi.fn()} />,
+    )
+
+    expect(screen.queryByText('EDIT WORK LOG')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '수정하기' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument()
   })
 })

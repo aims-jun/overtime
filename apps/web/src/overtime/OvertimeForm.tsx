@@ -80,18 +80,6 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
 
   return (
     <form className="record-form" onSubmit={submit}>
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">{record ? 'EDIT WORK LOG' : 'NEW WORK LOG'}</span>
-          <h2>{record ? '업무 연장 내역 수정' : '업무 시간 입력'}</h2>
-        </div>
-        {record && onCancel ? (
-          <button className="text-button" type="button" onClick={onCancel}>
-            취소
-          </button>
-        ) : null}
-      </div>
-
       <label className="field field-wide">
         <span>근무 날짜</span>
         <input
@@ -152,9 +140,16 @@ export function OvertimeForm({ record, onSaved, onCancel }: Props) {
       </label>
 
       {error ? <p className="form-error" role="alert">{error}</p> : null}
-      <button className="primary-button" type="submit" disabled={saving}>
-        {saving ? '저장 중…' : record ? '수정 저장' : '저장'}
-      </button>
+      <div className="form-actions">
+        {onCancel ? (
+          <button className="secondary-button" type="button" onClick={onCancel}>
+            취소
+          </button>
+        ) : null}
+        <button className="primary-button" type="submit" disabled={saving}>
+          {saving ? '저장 중…' : record ? '수정하기' : '저장하기'}
+        </button>
+      </div>
     </form>
   )
 }

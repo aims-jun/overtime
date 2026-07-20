@@ -2,8 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api, friendlyError } from '../api/http'
 import type { MonthlyOvertime, OvertimeRecord } from '../api/types'
+import { Dialog } from '../ui/Dialog'
+import { Icon } from '../ui/Icon'
+import { OvertimeEditorDialog } from './OvertimeEditorDialog'
 import { formatMinutes } from './time-preview'
-import { OvertimeForm } from './OvertimeForm'
 import { OvertimeList } from './OvertimeList'
 
 function currentMonth(): string {
@@ -28,6 +30,7 @@ export function OvertimePage() {
   const [month, setMonth] = useState(currentMonth)
   const [editing, setEditing] = useState<OvertimeRecord | null>(null)
   const [editorOpen, setEditorOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<OvertimeRecord | null>(null)
   const [deletingId, setDeletingId] = useState('')
   const [actionError, setActionError] = useState('')
   const queryClient = useQueryClient()
@@ -44,13 +47,13 @@ export function OvertimePage() {
   }
 
   const remove = async (record: OvertimeRecord) => {
-    if (!window.confirm(`${record.workDate} 업무 연장 내역을 삭제할까요?`)) return
     setDeletingId(record.id)
     setActionError('')
     try {
       await api<void>(`/api/overtime/${record.id}`, { method: 'DELETE' })
       if (editing?.id === record.id) setEditing(null)
       await queryClient.invalidateQueries({ queryKey: ['overtime'] })
+      setPendingDelete(null)
     } catch (error) {
       setActionError(friendlyError(error))
     } finally {
@@ -61,17 +64,15 @@ export function OvertimePage() {
   return (
     <main className="page-shell">
       <section className="summary-panel">
-        <div className="summary-copy">
+        <div className="summary-heading">
           <span className="eyebrow">
             WORK LOG · {monthName(query.data?.month ?? month)}
           </span>
           <h1>업무 연장 내역</h1>
-          <p>AIMS의 추가 근무 시간을 간편하게 기록하고 확인하세요.</p>
         </div>
         <div className="monthly-total" aria-label="선택한 달 업무 연장 합계">
           <span>{month.slice(5)}월 업무 연장</span>
           <strong>{formatMinutes(query.data?.totalMinutes ?? 0)}</strong>
-          <small>TOTAL EXTENDED</small>
         </div>
       </section>
 
@@ -79,27 +80,24 @@ export function OvertimePage() {
         className="add-record-button"
         type="button"
         aria-expanded={editorOpen}
-        aria-controls="work-time-editor"
         onClick={() => {
           setEditing(null)
           setEditorOpen(true)
         }}
       >
-        + 업무 시간 추가
+        <Icon name="plus" />
+        추가 근무 등록
       </button>
 
-      {editorOpen ? (
-        <section className="surface form-surface" id="work-time-editor">
-          <OvertimeForm
-            record={editing}
-            onSaved={refresh}
-            onCancel={() => {
-              setEditing(null)
-              setEditorOpen(false)
-            }}
-          />
-        </section>
-      ) : null}
+      <OvertimeEditorDialog
+        open={editorOpen}
+        record={editing}
+        onSaved={refresh}
+        onClose={() => {
+          setEditing(null)
+          setEditorOpen(false)
+        }}
+      />
 
       <section className="history-section">
         <div className="history-heading">
@@ -124,20 +122,60 @@ export function OvertimePage() {
             <button type="button" onClick={() => query.refetch()}>다시 불러오기</button>
           </div>
         ) : null}
-        {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
         {query.data ? (
           <OvertimeList
             records={query.data.records}
             deletingId={deletingId}
+            onAdd={() => {
+              setEditing(null)
+              setEditorOpen(true)
+            }}
             onEdit={(record) => {
               setEditing(record)
               setEditorOpen(true)
-              window.scrollTo({ top: 0, behavior: 'smooth' })
             }}
-            onDelete={remove}
+            onDelete={(record) => {
+              setActionError('')
+              setPendingDelete(record)
+            }}
           />
         ) : null}
       </section>
+
+      <Dialog
+        open={pendingDelete !== null}
+        title="내역을 삭제할까요?"
+        onClose={() => setPendingDelete(null)}
+        className="delete-confirm-dialog"
+      >
+        <div className="delete-confirm-content">
+          <p>
+            {pendingDelete
+              ? `${pendingDelete.reason} 내역은 삭제 후 복구할 수 없습니다.`
+              : null}
+          </p>
+          {actionError ? <p className="form-error" role="alert">{actionError}</p> : null}
+          <div className="dialog-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setPendingDelete(null)}
+            >
+              취소
+            </button>
+            <button
+              className="danger-confirm-button"
+              type="button"
+              disabled={!pendingDelete || deletingId === pendingDelete.id}
+              onClick={() => pendingDelete && remove(pendingDelete)}
+            >
+              {pendingDelete && deletingId === pendingDelete.id
+                ? '삭제 중…'
+                : '삭제하기'}
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </main>
   )
 }
