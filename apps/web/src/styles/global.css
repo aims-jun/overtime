@@ -1,17 +1,18 @@
 :root {
   font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #172118;
-  background: #f3f4ef;
+  color: #191f28;
+  background: #f2f4f6;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #172118;
+  --ink: #191f28;
   --ink-soft: #29352a;
   --lime: #d8ff45;
   --lime-hover: #c9ef36;
-  --surface: #ffffff;
-  --background: #f3f4ef;
-  --muted: #687069;
-  --line: #dfe3dc;
+  --surface: #fff;
+  --background: #f2f4f6;
+  --muted: #6b7684;
+  --weak: #8b95a1;
+  --line: #e5e8eb;
   --line-strong: #cbd1c8;
   --danger: #a84036;
   --danger-soft: #fff0ed;
@@ -32,6 +33,31 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
+
+.icon-button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  color: var(--muted);
+  background: transparent;
+}
+.icon-button:hover { color: var(--ink); background: #f2f4f6; }
+.icon-button--danger { color: var(--danger); }
+.app-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(88vh, 760px);
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 24px;
+  background: var(--surface);
+  box-shadow: 0 24px 80px rgba(0, 27, 55, .22);
+}
+.app-dialog::backdrop { background: rgba(15, 23, 31, .48); }
 
 .app-header {
   min-height: 64px;
@@ -275,6 +301,13 @@ h1, h2 { margin: 0; color: var(--ink); letter-spacing: -.045em; }
 .access-denied a { margin-top: 10px; color: var(--ink); font-weight: 800; }
 
 @media (max-width: 767px) {
+  .app-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 92vh;
+    margin: auto 0 0;
+    border-radius: 24px 24px 0 0;
+  }
   .app-header { min-height: 58px; gap: 12px; padding-inline: 18px; }
   .brand { font-size: 20px; }
   .user-menu { gap: 7px; }
