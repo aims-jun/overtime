@@ -1,8 +1,8 @@
 [Unit]
-Description=Daily AIMS overtime backup
+Description=AIMS overtime backup every six hours
 
 [Timer]
-OnCalendar=*-*-* 03:00:00 Asia/Seoul
+OnCalendar=*-*-* 00,06,12,18:00:00 Asia/Seoul
 Persistent=true
 RandomizedDelaySec=5m
 

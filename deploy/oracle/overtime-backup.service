@@ -1,10 +1,13 @@
 [Unit]
-Description=AIMS overtime SQLite backup to OCI Object Storage
+Description=AIMS overtime PostgreSQL backup to OCI Object Storage
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=overtime
+User=root
 EnvironmentFile=/opt/overtime/.env.backup
-ExecStart=/opt/overtime/docker/backup-oci.sh
+# Refuse to read secrets if the backup environment file is not mode 0600.
+ExecStartPre=/bin/sh -c 'test "$(stat -c %%a /opt/overtime/.env.backup)" = 600'
+ExecStart=/opt/overtime/docker/postgres-backup-oci.sh
+UMask=0077
