@@ -45,6 +45,26 @@ if [[ "$remote_dump_key" != "$remote_prefix.dump" ||
   exit 1
 fi
 
+artifacts=("$target_dump" "$target_checksum" "$target_metadata")
+object_names=("$remote_dump_key" "$remote_checksum_key" "$remote_metadata_key")
+collision_found=0
+for object_name in "${object_names[@]}"; do
+  if head_error="$(oci os object head \
+    --auth instance_principal \
+    --bucket-name "$OCI_BACKUP_BUCKET" \
+    --name "$object_name" 2>&1)"; then
+    echo "OCI backup key collision: $object_name" >&2
+    collision_found=1
+  elif [[ ! "$head_error" =~ 404|ObjectNotFound|NotFound ]]; then
+    echo "OCI preflight failed for $object_name: $head_error" >&2
+    exit 1
+  fi
+done
+if [[ "$collision_found" == 1 ]]; then
+  echo 'OCI backup aborted before upload because one or more keys already exist' >&2
+  exit 1
+fi
+
 attempted_names=()
 rollback_uploaded() {
   local rollback_failed=0
@@ -63,8 +83,6 @@ rollback_uploaded() {
 }
 
 # Metadata is uploaded last and acts as the remote set's commit marker.
-artifacts=("$target_dump" "$target_checksum" "$target_metadata")
-object_names=("$remote_dump_key" "$remote_checksum_key" "$remote_metadata_key")
 for index in "${!artifacts[@]}"; do
   artifact="${artifacts[index]}"
   object_name="${object_names[index]}"
@@ -73,7 +91,8 @@ for index in "${!artifacts[@]}"; do
     --auth instance_principal \
     --bucket-name "$OCI_BACKUP_BUCKET" \
     --name "$object_name" \
-    --file "$artifact" >/dev/null; then
+    --file "$artifact" \
+    --no-overwrite >/dev/null; then
     echo "OCI upload failed for $object_name; rolling back uploaded objects" >&2
     if ! rollback_uploaded; then
       echo 'OCI upload rollback incomplete; manual object cleanup is required' >&2

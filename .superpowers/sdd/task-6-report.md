@@ -152,3 +152,38 @@ git diff --check
 ```
 
 All commands exited 0.
+
+## Final OCI ownership preflight
+
+### RED
+
+Extended the fake OCI contract before implementation to require three exact-key
+`head` calls before upload, `--no-overwrite` on every put, and collision abort
+with zero puts and deletes. The first run exited 1 because the existing uploader
+made zero required head calls:
+
+```text
+test 0 = 3
+```
+
+### GREEN
+
+- All three nonce-bearing keys are preflighted before any upload.
+- An existing key aborts the run after preflight with zero puts and zero deletes;
+  a preseeded same-RUN_ID complete set remains byte-for-byte unchanged.
+- A non-404 head error aborts safely instead of being treated as absence.
+- Every put now uses `--no-overwrite` explicitly.
+- Attempted-key rollback ownership begins only after all three keys are confirmed
+  absent. The ambiguous post-commit metadata failure test still proves that the
+  current metadata key and both prior payload keys are deleted.
+
+Focused verification:
+
+```text
+bash -n docker/postgres-backup.sh docker/postgres-backup-oci.sh docker/backup-restore.test.sh
+bash docker/backup-restore.test.sh
+# PostgreSQL backup and OCI upload contract passed
+bash deploy/oracle/systemd-units.test.sh
+# oracle PostgreSQL backup systemd unit contract passed
+git diff --check
+```
