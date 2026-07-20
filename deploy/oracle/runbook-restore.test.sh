@@ -31,8 +31,10 @@ createdb_line="$(require_line 'createdb .*\$RESTORE_DATABASE' 'actual restore mu
 restore_line="$(require_line 'pg_restore --exit-on-error .*\$RESTORE_DATABASE' 'actual restore must restore into the fresh target database')"
 grant_runtime_line="$(require_line 'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES.*overtime_app' 'actual restore must grant runtime access to restored tables')"
 grant_backup_line="$(require_line 'GRANT SELECT ON ALL TABLES.*overtime_backup' 'actual restore must grant backup access to restored tables')"
+grant_backup_sequence_line="$(require_line 'GRANT SELECT ON ALL SEQUENCES.*overtime_backup' 'actual restore must grant backup access to restored sequence state')"
 role_check_line="$(require_line 'SET ROLE overtime_app' 'actual restore must verify runtime privileges through SET ROLE')"
 backup_check_line="$(require_line 'SET ROLE overtime_backup' 'actual restore must verify backup privileges through SET ROLE')"
+backup_dump_line="$(require_line 'pg_dump .*overtime_backup.*\$RESTORE_DATABASE' 'actual restore must run a real backup-role pg_dump probe')"
 switch_line="$(require_line 'env.production.next' 'actual restore must verify privileges before switching API configuration')"
 
 if [[ "$checksum_line" -ge "$stop_line" || "$archive_list_line" -ge "$stop_line" ]]; then
@@ -45,17 +47,24 @@ if [[ "$createdb_line" -ge "$restore_line" ]]; then
   exit 1
 fi
 
-if [[ "$grant_runtime_line" -le "$restore_line" || "$grant_backup_line" -le "$restore_line" \
+if [[ "$grant_runtime_line" -le "$restore_line" || "$grant_backup_line" -le "$restore_line" || "$grant_backup_sequence_line" -le "$restore_line" \
   || "$role_check_line" -le "$grant_runtime_line" || "$backup_check_line" -le "$grant_backup_line" \
-  || "$role_check_line" -ge "$switch_line" || "$backup_check_line" -ge "$switch_line" ]]; then
+  || "$backup_dump_line" -le "$grant_backup_sequence_line" || "$role_check_line" -ge "$switch_line" \
+  || "$backup_check_line" -ge "$switch_line" || "$backup_dump_line" -ge "$switch_line" ]]; then
   echo 'actual restore must grant and verify runtime/backup privileges before API switch' >&2
   exit 1
 fi
 
 if ! printf '%s\n' "$actual_restore" | grep -q 'ALTER DEFAULT PRIVILEGES.*overtime_app' \
   || ! printf '%s\n' "$actual_restore" | grep -q 'ALTER DEFAULT PRIVILEGES.*overtime_backup' \
+  || ! printf '%s\n' "$actual_restore" | grep -q 'ALTER DEFAULT PRIVILEGES.*SEQUENCES.*overtime_backup' \
   || ! printf '%s\n' "$actual_restore" | grep -q 'ROLLBACK'; then
   echo 'actual restore must set future grants and roll back its runtime DML privilege probe' >&2
+  exit 1
+fi
+
+if ! grep -q 'GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO overtime_backup' "$runbook"; then
+  echo 'deployment migration instructions must grant backup access to existing sequence state' >&2
   exit 1
 fi
 

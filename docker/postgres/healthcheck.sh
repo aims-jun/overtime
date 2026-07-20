@@ -47,6 +47,22 @@ default_table_privileges AS (
     AND defaults.defaclobjtype = 'r'
     AND grantee.rolname IN ('overtime_app', 'overtime_backup')
   GROUP BY grantee.rolname
+),
+default_sequence_privileges AS (
+  SELECT
+    grantee.rolname,
+    count(*) FILTER (WHERE acl.privilege_type = 'SELECT') AS select_count,
+    count(*) AS total_count
+  FROM pg_default_acl AS defaults
+  CROSS JOIN LATERAL aclexplode(defaults.defaclacl) AS acl
+  JOIN pg_roles AS grantee ON grantee.oid = acl.grantee
+  CROSS JOIN role_ids
+  CROSS JOIN schema_ids
+  WHERE defaults.defaclrole = role_ids.migrator
+    AND defaults.defaclnamespace = schema_ids.public_schema
+    AND defaults.defaclobjtype = 'S'
+    AND grantee.rolname IN ('overtime_app', 'overtime_backup')
+  GROUP BY grantee.rolname
 )
 SELECT
   role_state.valid
@@ -67,6 +83,16 @@ SELECT
     SELECT 1
     FROM default_table_privileges
     WHERE rolname = 'overtime_backup' AND dml_count = 1 AND total_count = 1
+  )
+  AND EXISTS (
+    SELECT 1
+    FROM default_sequence_privileges
+    WHERE rolname = 'overtime_backup' AND select_count = 1 AND total_count = 1
+  )
+  AND NOT EXISTS (
+    SELECT 1
+    FROM default_sequence_privileges
+    WHERE rolname = 'overtime_app'
   )
 FROM role_ids
 CROSS JOIN schema_ids

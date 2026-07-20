@@ -65,7 +65,16 @@ docker exec --interactive \
   psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_migrator --dbname overtime <<'SQL' >/dev/null
 CREATE TABLE privilege_probe (id integer PRIMARY KEY, value text NOT NULL);
 INSERT INTO privilege_probe VALUES (1, 'seed');
+CREATE SEQUENCE privilege_probe_sequence;
+SELECT nextval('privilege_probe_sequence');
 SQL
+
+if docker exec --env PGPASSWORD="$runtime_password" "$container" \
+  psql --host=127.0.0.1 --username overtime_app --dbname overtime \
+  --command='SELECT last_value FROM privilege_probe_sequence;' >/dev/null 2>&1; then
+  echo 'runtime role unexpectedly read sequence state' >&2
+  exit 1
+fi
 
 docker exec --interactive \
   --env PGPASSWORD="$runtime_password" \
@@ -92,6 +101,28 @@ docker exec \
   psql --set=ON_ERROR_STOP=1 --host=127.0.0.1 --username overtime_backup --dbname overtime \
   --command='SELECT * FROM privilege_probe;' >/dev/null
 
+test "$(docker exec --env PGPASSWORD="$backup_password" "$container" \
+  psql --tuples-only --no-align --host=127.0.0.1 --username overtime_backup --dbname overtime \
+  --command='SELECT last_value FROM privilege_probe_sequence;' | tr -d '[:space:]')" = 1
+
+docker exec --env PGPASSWORD="$backup_password" "$container" \
+  pg_dump --host=127.0.0.1 --username overtime_backup --dbname overtime \
+  --data-only --table=privilege_probe_sequence >/dev/null
+
+if docker exec --env PGPASSWORD="$backup_password" "$container" \
+  psql --host=127.0.0.1 --username overtime_backup --dbname overtime \
+  --command="SELECT nextval('privilege_probe_sequence');" >/dev/null 2>&1; then
+  echo 'backup role unexpectedly advanced a sequence' >&2
+  exit 1
+fi
+
+if docker exec --env PGPASSWORD="$backup_password" "$container" \
+  psql --host=127.0.0.1 --username overtime_backup --dbname overtime \
+  --command='ALTER SEQUENCE privilege_probe_sequence RESTART WITH 10;' >/dev/null 2>&1; then
+  echo 'backup role unexpectedly altered a sequence' >&2
+  exit 1
+fi
+
 if docker exec \
   --env PGPASSWORD="$backup_password" \
   "$container" \
@@ -106,6 +137,14 @@ docker exec "$container" psql --username postgres --dbname overtime \
   >/dev/null
 if docker exec "$container" /usr/local/bin/overtime-postgres-healthcheck >/dev/null 2>&1; then
   echo 'healthcheck stayed healthy after required default privilege was removed' >&2
+  exit 1
+fi
+
+docker exec "$container" psql --username postgres --dbname overtime \
+  --command='ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT ON TABLES TO overtime_backup; ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public REVOKE SELECT ON SEQUENCES FROM overtime_backup;' \
+  >/dev/null
+if docker exec "$container" /usr/local/bin/overtime-postgres-healthcheck >/dev/null 2>&1; then
+  echo 'healthcheck stayed healthy after required default sequence privilege was removed' >&2
   exit 1
 fi
 

@@ -97,8 +97,13 @@ set +a
 docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps \
   -e DATABASE_MIGRATION_URL -e SQLITE_SOURCE_PATH=/not-used \
   api npm run db:migrate
+docker compose --env-file .env.production -f compose.production.yaml exec -T postgres \
+  psql --username postgres --dbname overtime --set=ON_ERROR_STOP=1 \
+  --command='GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO overtime_backup;'
 unset POSTGRES_ADMIN_PASSWORD POSTGRES_RUNTIME_PASSWORD POSTGRES_MIGRATION_PASSWORD POSTGRES_BACKUP_PASSWORD DATABASE_URL DATABASE_MIGRATION_URL
 ```
+
+sequence가 없어도 위 grant는 성공한다. init 시 default sequence `SELECT`를 설정하지만, 이미 생성된 sequence 상태를 `pg_dump` backup role이 읽을 수 있게 매 schema migration 후 이 explicit grant를 반복한다. runtime role에는 sequence 권한을 주지 않는다.
 
 ## 5. SQLite에서 cutover
 
@@ -226,10 +231,13 @@ test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" 
   API_STOPPED=1
   docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'exec createdb --username "$POSTGRES_USER" --owner overtime_migrator "$1"' sh "$RESTORE_DATABASE"
   docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'export PGPASSWORD="$POSTGRES_MIGRATION_PASSWORD"; exec pg_restore --exit-on-error --no-owner --no-acl --username overtime_migrator --dbname "$1"' sh "$RESTORE_DATABASE" < "$ARCHIVE"
-  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='GRANT USAGE ON SCHEMA public TO overtime_app, overtime_backup; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO overtime_app; GRANT SELECT ON ALL TABLES IN SCHEMA public TO overtime_backup;'
-  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO overtime_app; ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT ON TABLES TO overtime_backup;'
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='GRANT USAGE ON SCHEMA public TO overtime_app, overtime_backup; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO overtime_app; GRANT SELECT ON ALL TABLES IN SCHEMA public TO overtime_backup; GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO overtime_backup;'
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO overtime_app; ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT ON TABLES TO overtime_backup; ALTER DEFAULT PRIVILEGES FOR ROLE overtime_migrator IN SCHEMA public GRANT SELECT ON SEQUENCES TO overtime_backup;'
   docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command="BEGIN; SET ROLE overtime_app; SELECT COUNT(*) FROM users; INSERT INTO users (id, google_subject, email, name, last_login_at) SELECT '00000000-0000-0000-0000-000000000000'::uuid, 'privilege-probe', 'probe@example.invalid', 'probe', now() WHERE false; UPDATE users SET name = name WHERE false; DELETE FROM users WHERE false; ROLLBACK;"
   docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --set=ON_ERROR_STOP=1 --command='BEGIN; SET ROLE overtime_backup; SELECT COUNT(*) FROM users; ROLLBACK;'
+  BACKUP_PROBE="$TMP/backup-role-probe.dump"
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres sh -c 'export PGPASSWORD="$POSTGRES_BACKUP_PASSWORD"; exec pg_dump --username overtime_backup --dbname "$1" --format=custom --no-owner --no-acl' sh "$RESTORE_DATABASE" > "$BACKUP_PROBE"
+  docker compose --env-file .env.production -f compose.production.yaml exec -T postgres pg_restore --list < "$BACKUP_PROBE"
   COUNTS="$(docker compose --env-file .env.production -f compose.production.yaml exec -T postgres psql --username postgres --dbname "$RESTORE_DATABASE" --tuples-only --no-align --command='SELECT (SELECT COUNT(*) FROM users) || '\''|'\'' || (SELECT COUNT(*) FROM overtime_records);' | tr -d '[:space:]')"
   test "$COUNTS" = "$USERS_COUNT|$RECORDS_COUNT"
 

@@ -54,6 +54,13 @@ grep -F 'GRANT CONNECT ON DATABASE :"database_name" TO overtime_app, overtime_ba
 grep -F 'GRANT USAGE ON SCHEMA public TO overtime_app, overtime_backup' "$tmp/psql-stdin.log"
 grep -F 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO overtime_app' "$tmp/psql-stdin.log"
 grep -F 'GRANT SELECT ON TABLES TO overtime_backup' "$tmp/psql-stdin.log"
+grep -F 'GRANT SELECT ON SEQUENCES TO overtime_backup' "$tmp/psql-stdin.log"
+if grep -E 'GRANT .* ON SEQUENCES TO overtime_app' "$tmp/psql-stdin.log"; then
+  echo 'runtime role must not receive sequence privileges without a generated-column requirement' >&2
+  exit 1
+fi
+grep -F "defaults.defaclobjtype = 'S'" "$root/docker/postgres/healthcheck.sh"
+grep -F "acl.privilege_type = 'SELECT'" "$root/docker/postgres/healthcheck.sh"
 grep -Fxq 'COMMIT;' "$tmp/psql-stdin.log"
 
 begin_line="$(grep -nFx 'BEGIN;' "$tmp/psql-stdin.log" | cut -d: -f1)"
