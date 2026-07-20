@@ -24,28 +24,43 @@ archive="overtime-$timestamp.dump"
 target_dump="$BACKUP_DIR/$archive"
 target_checksum="$target_dump.sha256"
 target_metadata="$BACKUP_DIR/overtime-$timestamp.metadata"
+publish_lock="$BACKUP_DIR/.overtime-$timestamp.publish"
+if ! mkdir "$publish_lock"; then
+  echo "backup publication already exists for timestamp: $timestamp" >&2
+  exit 1
+fi
+if [[ -e "$target_dump" || -e "$target_checksum" || -e "$target_metadata" ]]; then
+  rmdir "$publish_lock"
+  echo "backup artifact already exists for timestamp: $timestamp" >&2
+  exit 1
+fi
 temporary_dump="$(mktemp "$BACKUP_DIR/.${archive}.tmp.XXXXXX")"
 temporary_checksum="$(mktemp "$BACKUP_DIR/.${archive}.sha256.tmp.XXXXXX")"
 temporary_metadata="$(mktemp "$BACKUP_DIR/.overtime-$timestamp.metadata.tmp.XXXXXX")"
+publication_started=0
+publication_complete=0
 
 cleanup_temporary() {
   rm -f "$temporary_dump" "$temporary_checksum" "$temporary_metadata"
+  if [[ "$publication_started" == 1 && "$publication_complete" != 1 ]]; then
+    rm -f "$target_dump" "$target_checksum" "$target_metadata"
+  fi
+  rmdir "$publish_lock" 2>/dev/null || true
 }
 trap cleanup_temporary EXIT
 
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" \
-  exec -T -e PGPASSWORD="$POSTGRES_BACKUP_PASSWORD" postgres \
-  pg_dump --username overtime_backup --dbname overtime \
-  --format=custom --no-owner --no-acl > "$temporary_dump"
+  exec -T postgres sh -c \
+  'export PGPASSWORD="$POSTGRES_BACKUP_PASSWORD"; exec pg_dump --username overtime_backup --dbname overtime --format=custom --no-owner --no-acl' \
+  > "$temporary_dump"
 
 docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" \
   exec -T postgres pg_restore --list < "$temporary_dump" >/dev/null
 
 postgres_version="$({
   docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" \
-    exec -T -e PGPASSWORD="$POSTGRES_BACKUP_PASSWORD" postgres \
-    psql --username overtime_backup --dbname overtime --tuples-only --no-align \
-    --command="SELECT current_setting('server_version');"
+    exec -T postgres sh -c \
+    'export PGPASSWORD="$POSTGRES_BACKUP_PASSWORD"; exec psql --username overtime_backup --dbname overtime --tuples-only --no-align --command="SELECT current_setting('\''server_version'\'');"'
 } | tr -d '[:space:]')"
 postgres_major_minor="$(printf '%s\n' "$postgres_version" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')"
 if [[ ! "$postgres_major_minor" =~ ^[0-9]+\.[0-9]+$ ]]; then
@@ -59,9 +74,13 @@ printf 'timestamp_utc=%s\npostgres_version=%s\narchive=%s\n' \
   "$timestamp" "$postgres_major_minor" "$archive" > "$temporary_metadata"
 chmod 600 "$temporary_dump" "$temporary_checksum" "$temporary_metadata"
 
+publication_started=1
 mv "$temporary_dump" "$target_dump"
 mv "$temporary_checksum" "$target_checksum"
+# Metadata is the commit marker: a local set is valid only after this final move.
 mv "$temporary_metadata" "$target_metadata"
+publication_complete=1
+cleanup_temporary
 trap - EXIT
 
 printf '%s\n' "$target_dump"

@@ -33,17 +33,56 @@ cat > "$tmp/bin/oci" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$OCI_CALL_LOG"
-count="$(wc -l < "$OCI_CALL_LOG" | tr -d ' ')"
-if [[ -n "${FAIL_OCI_CALL:-}" && "$count" == "$FAIL_OCI_CALL" ]]; then
-  exit 43
-fi
+operation="$3"
+shift 3
+object_name=''
+source_file=''
+while (($#)); do
+  case "$1" in
+    --name) object_name="$2"; shift 2 ;;
+    --file) source_file="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+case "$operation" in
+  put)
+    put_count="$(cat "$OCI_PUT_COUNT" 2>/dev/null || printf 0)"
+    put_count="$((put_count + 1))"
+    printf '%s\n' "$put_count" > "$OCI_PUT_COUNT"
+    if [[ -n "${FAIL_OCI_CALL:-}" && "$put_count" == "$FAIL_OCI_CALL" ]]; then
+      exit 43
+    fi
+    mkdir -p "$OCI_REMOTE_DIR/$(dirname "$object_name")"
+    /bin/cp "$source_file" "$OCI_REMOTE_DIR/$object_name"
+    ;;
+  delete)
+    if [[ "${FAIL_OCI_DELETE:-0}" == 1 ]]; then
+      exit 44
+    fi
+    /bin/rm -f "$OCI_REMOTE_DIR/$object_name"
+    ;;
+  *) exit 98 ;;
+esac
 EOF
 cat > "$tmp/bin/find" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >> "$FIND_CALL_LOG"
 EOF
-chmod +x "$tmp/bin/docker" "$tmp/bin/oci" "$tmp/bin/find"
+cat > "$tmp/bin/mv" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+destination="${!#}"
+if [[ "${FAIL_METADATA_PUBLISH:-0}" == 1 && "$destination" == *.metadata ]]; then
+  exit 45
+fi
+exec /bin/mv "$@"
+EOF
+cat > "$tmp/bin/date" <<'EOF'
+#!/usr/bin/env bash
+printf '20260720T000000Z\n'
+EOF
+chmod +x "$tmp/bin/docker" "$tmp/bin/oci" "$tmp/bin/find" "$tmp/bin/mv" "$tmp/bin/date"
 
 password='backup-password-MUST-NOT-LEAK'
 common_env=(
@@ -62,6 +101,8 @@ run_backup() {
     BACKUP_DIR="$backup_dir" \
     DOCKER_CALL_LOG="$tmp/docker.log" \
     OCI_CALL_LOG="$tmp/oci.log" \
+    OCI_PUT_COUNT="$tmp/oci-put-count" \
+    OCI_REMOTE_DIR="$tmp/remote" \
     FIND_CALL_LOG="$tmp/find.log" \
     "$@"
 }
@@ -82,17 +123,47 @@ test ! -s "$tmp/oci.log"
 test "$(cat "$tmp/validation-failure/overtime-20260718T000000Z.dump")" = 'known-good'
 test "$(find "$tmp/validation-failure" -maxdepth 1 -type f | wc -l | tr -d ' ')" = 1
 
+# Metadata is the atomic local commit marker; a failed final publish leaves no set.
+mkdir -p "$tmp/publication-failure"
+: > "$tmp/docker.log"
+if run_backup "$tmp/publication-failure" \
+  FAIL_METADATA_PUBLISH=1 "$root/docker/postgres-backup.sh" \
+  >"$tmp/publication-failure.stdout" 2>"$tmp/publication-failure.stderr"; then
+  echo 'backup unexpectedly succeeded when commit-marker publication failed' >&2
+  exit 1
+fi
+test -z "$(find "$tmp/publication-failure" -maxdepth 1 -type f -name 'overtime-*' -print)"
+
+# A same-timestamp retry cannot overwrite a previously committed valid set.
+mkdir -p "$tmp/timestamp-collision"
+for suffix in dump dump.sha256 metadata; do
+  printf 'previous-valid\n' > "$tmp/timestamp-collision/overtime-20260720T000000Z.$suffix"
+done
+if run_backup "$tmp/timestamp-collision" "$root/docker/postgres-backup.sh" \
+  >"$tmp/collision.stdout" 2>"$tmp/collision.stderr"; then
+  echo 'backup unexpectedly overwrote a committed same-timestamp set' >&2
+  exit 1
+fi
+for suffix in dump dump.sha256 metadata; do
+  test "$(cat "$tmp/timestamp-collision/overtime-20260720T000000Z.$suffix")" = 'previous-valid'
+done
+
 # A successful backup creates and uploads a complete three-file artifact set.
 : > "$tmp/docker.log"
 : > "$tmp/oci.log"
+: > "$tmp/oci-put-count"
 : > "$tmp/find.log"
+rm -rf "$tmp/remote"
 run_backup "$tmp/success" "$root/docker/postgres-backup-oci.sh" \
   >"$tmp/success.stdout" 2>"$tmp/success.stderr"
 
 grep -F -- 'compose --env-file ' "$tmp/docker.log" >/dev/null
-grep -F -- ' exec -T -e PGPASSWORD=' "$tmp/docker.log" >/dev/null
-grep -F -- 'postgres pg_dump --username overtime_backup --dbname overtime --format=custom --no-owner --no-acl' "$tmp/docker.log" >/dev/null
+grep -F -- 'exec -T postgres sh -c export PGPASSWORD="$POSTGRES_BACKUP_PASSWORD"; exec pg_dump --username overtime_backup --dbname overtime --format=custom --no-owner --no-acl' "$tmp/docker.log" >/dev/null
 grep -F -- 'postgres pg_restore --list' "$tmp/docker.log" >/dev/null
+if grep -F -- "$password" "$tmp/docker.log"; then
+  echo 'backup password leaked into host Docker argv' >&2
+  exit 1
+fi
 
 dump="$(printf '%s\n' "$tmp/success"/overtime-*.dump)"
 checksum="$dump.sha256"
@@ -117,6 +188,10 @@ done < "$tmp/oci.log"
 grep -F -- '.dump ' "$tmp/oci.log" >/dev/null
 grep -F -- '.dump.sha256 ' "$tmp/oci.log" >/dev/null
 grep -F -- '.metadata ' "$tmp/oci.log" >/dev/null
+grep '^os object put ' "$tmp/oci.log" | tail -1 | grep -F -- '.metadata ' >/dev/null
+test -f "$tmp/remote/postgres/$(basename "$dump")"
+test -f "$tmp/remote/postgres/$(basename "$checksum")"
+test -f "$tmp/remote/postgres/$(basename "$metadata")"
 grep -F -- '-type f -name overtime-*.dump* -mtime +2 -delete' "$tmp/find.log" >/dev/null
 grep -F -- '-type f -name overtime-*.metadata -mtime +2 -delete' "$tmp/find.log" >/dev/null
 
@@ -125,27 +200,49 @@ if grep -F -- "$password" "$tmp/success.stdout" "$tmp/success.stderr"; then
   exit 1
 fi
 
-# A partial OCI failure leaves existing backups untouched and never runs cleanup.
-mkdir -p "$tmp/upload-failure"
-for suffix in dump dump.sha256 metadata; do
-  printf 'previous-valid\n' > "$tmp/upload-failure/overtime-20260717T000000Z.$suffix"
+# A partial OCI failure rolls back every successful put and never runs cleanup.
+for failed_put in 2 3; do
+  case_dir="$tmp/upload-failure-$failed_put"
+  mkdir -p "$case_dir"
+  for suffix in dump dump.sha256 metadata; do
+    printf 'previous-valid\n' > "$case_dir/overtime-20260717T000000Z.$suffix"
+  done
+  : > "$tmp/docker.log"
+  : > "$tmp/oci.log"
+  : > "$tmp/oci-put-count"
+  : > "$tmp/find.log"
+  rm -rf "$tmp/remote"
+  if run_backup "$case_dir" \
+    FAIL_OCI_CALL="$failed_put" "$root/docker/postgres-backup-oci.sh" \
+    >"$case_dir.stdout" 2>"$case_dir.stderr"; then
+    echo "backup unexpectedly succeeded when OCI put $failed_put failed" >&2
+    exit 1
+  fi
+  test ! -s "$tmp/find.log"
+  test "$(grep -c '^os object delete ' "$tmp/oci.log")" = "$((failed_put - 1))"
+  test -z "$(find "$tmp/remote" -type f -print 2>/dev/null || true)"
+  for suffix in dump dump.sha256 metadata; do
+    test "$(cat "$case_dir/overtime-20260717T000000Z.$suffix")" = 'previous-valid'
+  done
+  if grep -F -- "$password" "$case_dir.stdout" "$case_dir.stderr" "$tmp/docker.log"; then
+    echo 'backup password leaked during upload failure' >&2
+    exit 1
+  fi
 done
+
+# Rollback failure remains a hard failure and is explicit to operators.
 : > "$tmp/docker.log"
 : > "$tmp/oci.log"
+: > "$tmp/oci-put-count"
 : > "$tmp/find.log"
-if run_backup "$tmp/upload-failure" \
-  FAIL_OCI_CALL=2 "$root/docker/postgres-backup-oci.sh" \
-  >"$tmp/upload-failure.stdout" 2>"$tmp/upload-failure.stderr"; then
-  echo 'backup unexpectedly succeeded when an OCI upload failed' >&2
+rm -rf "$tmp/remote"
+if run_backup "$tmp/rollback-failure" \
+  FAIL_OCI_CALL=2 FAIL_OCI_DELETE=1 "$root/docker/postgres-backup-oci.sh" \
+  >"$tmp/rollback-failure.stdout" 2>"$tmp/rollback-failure.stderr"; then
+  echo 'backup unexpectedly succeeded when OCI rollback failed' >&2
   exit 1
 fi
+grep -F -- 'OCI rollback failed for postgres/overtime-' "$tmp/rollback-failure.stderr" >/dev/null
 test ! -s "$tmp/find.log"
-for suffix in dump dump.sha256 metadata; do
-  test "$(cat "$tmp/upload-failure/overtime-20260717T000000Z.$suffix")" = 'previous-valid'
-done
-if grep -F -- "$password" "$tmp/upload-failure.stdout" "$tmp/upload-failure.stderr"; then
-  echo 'backup password leaked during upload failure' >&2
-  exit 1
-fi
 
 echo 'PostgreSQL backup and OCI upload contract passed'
