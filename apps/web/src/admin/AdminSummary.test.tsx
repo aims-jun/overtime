@@ -51,6 +51,35 @@ describe('AdminSummary', () => {
       .not.toBeInTheDocument()
   })
 
+  it('caps the expanded employee summary at ten people', async () => {
+    const user = userEvent.setup()
+    const cappedReport: AdminReport = {
+      ...report,
+      totalsByUser: Array.from({ length: 11 }, (_, index) => ({
+        user: {
+          id: `cap-${index + 1}`,
+          name: `직원 ${index + 1}`,
+          email: `cap-${index + 1}@aimskr.com`,
+        },
+        totalMinutes: 110 - index,
+      })),
+    }
+    render(<AdminSummary report={cappedReport} />)
+
+    const peopleSummary = screen.getByText('직원별 합계').parentElement
+    expect(within(peopleSummary!).getByText('10명')).toBeInTheDocument()
+
+    const expand = screen.getByRole('button', { name: '전체 10명 보기' })
+    expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await user.click(expand)
+
+    const list = screen.getByRole('list', { name: '직원별 업무 연장 합계' })
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10)
+    expect(screen.queryByText('직원 11')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '접기' }))
+      .toHaveAttribute('aria-expanded', 'true')
+  })
+
   it('shows an explicit empty employee summary', () => {
     render(<AdminSummary report={{ ...report, totalsByUser: [] }} />)
 
