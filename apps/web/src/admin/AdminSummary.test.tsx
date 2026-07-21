@@ -29,6 +29,7 @@ describe('AdminSummary', () => {
     expect(screen.queryByText('다섯째')).not.toBeInTheDocument()
 
     const expand = screen.getByRole('button', { name: '전체 5명 보기' })
+    expect(expand.getAttribute('aria-controls')).toBe(list.id)
     expect(expand).toHaveAttribute('aria-expanded', 'false')
     await user.click(expand)
 
