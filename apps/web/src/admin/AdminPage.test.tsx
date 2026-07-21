@@ -195,6 +195,12 @@ describe('AdminPage', () => {
     )
   })
 
+  it('keeps admin filter controls at the same explicit height', () => {
+    expect(globalStyles).toMatch(
+      /\.admin-month-field \.month-picker-trigger,\s*\.admin-filters select \{[^}]*height: 48px;/,
+    )
+  })
+
   it('shows an empty report state', async () => {
     server.use(
       http.get('/api/admin/users', () => HttpResponse.json([])),
