@@ -1,4 +1,5 @@
 import type { AdminUser } from '../api/types'
+import { Icon } from '../ui/Icon'
 import { MonthPicker } from '../ui/MonthPicker'
 
 type Props = {
@@ -21,17 +22,20 @@ export function AdminFilters({ month, userId, users, onChange }: Props) {
       </div>
       <label className="field">
         <span>직원</span>
-        <select
-          value={userId ?? ''}
-          onChange={(event) =>
-            onChange({ month, userId: event.target.value || undefined })
-          }
-        >
-          <option value="">전체 직원</option>
-          {users.map((user) => (
-            <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
-          ))}
-        </select>
+        <div className="admin-select-control">
+          <select
+            value={userId ?? ''}
+            onChange={(event) =>
+              onChange({ month, userId: event.target.value || undefined })
+            }
+          >
+            <option value="">전체 직원</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>{user.name} · {user.email}</option>
+            ))}
+          </select>
+          <Icon name="chevron-down" size={18} />
+        </div>
       </label>
     </section>
   )
