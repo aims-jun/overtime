@@ -339,3 +339,75 @@ git push origin main
 ```
 
 Expected: remote `main` contains all implementation commits.
+
+### Task 6: 관리자 필터 컨트롤 높이 회귀 수정
+
+**Files:**
+- Modify: `apps/web/src/admin/AdminPage.test.tsx`
+- Modify: `apps/web/src/styles/global.css`
+
+**Interfaces:**
+- Consumes: 관리자 월 선택기 trigger와 직원 선택 native `select`
+- Produces: 두 컨트롤 모두 실제 계산 높이 48px인 관리자 필터
+
+- [ ] **Step 1: 두 컨트롤의 명시적 높이 실패 테스트 작성**
+
+```tsx
+it('keeps admin filter controls at the same explicit height', () => {
+  expect(globalStyles).toMatch(
+    /\.admin-month-field \.month-picker-trigger,\s*\.admin-filters select \{[^}]*height: 48px;/,
+  )
+})
+```
+
+- [ ] **Step 2: 실패 확인**
+
+Run: `npm test --workspace apps/web -- AdminPage.test.tsx --run`
+
+Expected: FAIL because the month trigger has only `min-height` and the employee select can keep a browser-specific intrinsic height.
+
+- [ ] **Step 3: 두 컨트롤의 실제 높이를 48px로 고정**
+
+```css
+.admin-month-field .month-picker-trigger,
+.admin-filters select { height: 48px; }
+```
+
+기존 너비 규칙과 공통 폼 스타일은 유지한다. `select`를 커스텀 컴포넌트로 교체하거나 다른 관리자 레이아웃을 변경하지 않는다.
+
+- [ ] **Step 4: 대상 테스트와 전체 정적 검증**
+
+Run:
+
+```bash
+npm test --workspace apps/web -- AdminPage.test.tsx --run
+npm test --workspace apps/web -- --run
+npm run lint --workspace apps/web
+npm run build --workspace apps/web
+git diff --check
+```
+
+Expected: target and full tests PASS, lint/build exit 0, diff check has no output.
+
+- [ ] **Step 5: 실제 브라우저 높이·정렬 실측**
+
+관리자 필터를 320px, 360px, 390px, 430px, 1280px에서 확인한다.
+
+- `.admin-month-field .month-picker-trigger`의 계산 높이가 48px
+- `.admin-filters select`의 계산 높이가 48px
+- 같은 행인 PC에서 두 컨트롤의 `top`과 `bottom` 차이가 각각 1px 이내
+- 모든 너비에서 `scrollWidth === clientWidth`
+
+- [ ] **Step 6: 운영 백업 및 웹 전용 재배포**
+
+Task 5의 절차를 다시 따른다. 배포 전후 `users`와 `overtime_records` 건수를 비교하고 API·PostgreSQL 컨테이너는 재생성하지 않는다.
+
+- [ ] **Step 7: 구현 커밋과 main 푸시**
+
+```bash
+git add apps/web/src/admin/AdminPage.test.tsx apps/web/src/styles/global.css
+git commit -m "fix(web): align admin filter control heights"
+git push origin main
+```
+
+Expected: 운영 화면과 remote `main`에 동일한 수정이 반영된다.
