@@ -7,7 +7,7 @@ const globalStyles = readFileSync('src/styles/global.css', 'utf8')
 
 describe('AdminFilters', () => {
   it('uses a centered service icon instead of the browser select arrow', () => {
-    const { container } = render(
+    render(
       <AdminFilters
         month="2026-07"
         users={[{ id: 'user-1', name: '조영래', email: 'yrcho@aimskr.com' }]}
