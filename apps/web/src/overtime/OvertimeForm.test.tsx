@@ -102,13 +102,22 @@ describe('OvertimeForm', () => {
     expect(arrow?.querySelector('svg')).toBeInTheDocument()
     expect(arrow).not.toHaveTextContent('→')
     expect(globalStyles).toMatch(
-      /\.time-arrow \{[^}]*height: 48px;[^}]*place-items: center;[^}]*line-height: 0;/,
+      /\.time-arrow \{[^}]*display: grid;[^}]*place-items: center;[^}]*line-height: 0;/,
+    )
+  })
+
+  it('keeps both time inputs and the arrow in identical 48px slots', () => {
+    expect(globalStyles).toMatch(
+      /\.time-fields select,\s*\.time-arrow \{ height: 48px; \}/,
+    )
+    expect(globalStyles).toMatch(
+      /\.time-arrow \{[^}]*display: grid;[^}]*place-items: center;[^}]*align-self: end;/,
     )
   })
 
   it('rotates only the arrow icon when time fields stack', () => {
     expect(globalStyles).toMatch(
-      /@media \(max-width: 359px\) \{[\s\S]*\.time-arrow \{[^}]*width: 100%;[^}]*height: 18px;[^}]*\}[\s\S]*\.time-arrow svg \{ transform: rotate\(90deg\); \}/,
+      /@media \(max-width: 359px\) \{[\s\S]*\.time-arrow \{[^}]*width: 100%;[^}]*height: 48px;[^}]*\}[\s\S]*\.time-arrow svg \{ transform: rotate\(90deg\); \}/,
     )
     expect(globalStyles).not.toMatch(
       /@media \(max-width: 359px\) \{[\s\S]*\.time-arrow \{[^}]*transform:/,
