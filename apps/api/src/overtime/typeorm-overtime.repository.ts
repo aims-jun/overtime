@@ -4,6 +4,15 @@ import { DataSource, Repository } from 'typeorm';
 import { OvertimeRecordEntity } from '../database/entities/overtime-record.entity';
 import { OvertimeRepository } from './overtime.repository';
 
+function isPostgresExclusionViolation(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23P01'
+  );
+}
+
 @Injectable()
 export class TypeOrmOvertimeRepository extends OvertimeRepository {
   constructor(
@@ -39,18 +48,23 @@ export class TypeOrmOvertimeRepository extends OvertimeRepository {
   saveIfNoOverlap(
     record: OvertimeRecordEntity,
   ): Promise<OvertimeRecordEntity | null> {
-    return this.dataSource.transaction(async (manager) => {
-      const repository = manager.getRepository(OvertimeRecordEntity);
-      const overlap = await repository
-        .createQueryBuilder('record')
-        .where('record.userId = :userId', { userId: record.userId })
-        .andWhere('record.id != :id', { id: record.id })
-        .andWhere('record.startAt < :endAt', { endAt: record.endAt })
-        .andWhere('record.endAt > :startAt', { startAt: record.startAt })
-        .getOne();
-      if (overlap) return null;
-      return repository.save(record);
-    });
+    return this.dataSource
+      .transaction(async (manager) => {
+        const repository = manager.getRepository(OvertimeRecordEntity);
+        const overlap = await repository
+          .createQueryBuilder('record')
+          .where('record.userId = :userId', { userId: record.userId })
+          .andWhere('record.id != :id', { id: record.id })
+          .andWhere('record.startAt < :endAt', { endAt: record.endAt })
+          .andWhere('record.endAt > :startAt', { startAt: record.startAt })
+          .getOne();
+        if (overlap) return null;
+        return repository.save(record);
+      })
+      .catch((error: unknown) => {
+        if (isPostgresExclusionViolation(error)) return null;
+        throw error;
+      });
   }
 
   async remove(record: OvertimeRecordEntity): Promise<void> {
