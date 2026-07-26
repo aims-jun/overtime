@@ -22,30 +22,32 @@
 ### Task 1: Map database overlap violations to the existing repository result
 
 **Files:**
+
 - Create: `apps/api/src/overtime/typeorm-overtime.repository.spec.ts`
 - Modify: `apps/api/src/overtime/typeorm-overtime.repository.ts`
 
 **Interfaces:**
+
 - Consumes: `TypeOrmOvertimeRepository.saveIfNoOverlap(record): Promise<OvertimeRecordEntity | null>`.
 - Produces: PostgreSQL query errors with `code === '23P01'` return `null`; other query errors are rethrown.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-it('returns null when PostgreSQL rejects an overlapping time range', async () => {
+it("returns null when PostgreSQL rejects an overlapping time range", async () => {
   const repository = createRepository({
     transaction: jest.fn(async (work) =>
       work({
         getRepository: () => ({
           createQueryBuilder: () => overlapFreeQuery(),
-          save: jest.fn().mockRejectedValue({ code: '23P01' }),
+          save: jest.fn().mockRejectedValue({ code: "23P01" }),
         }),
       }),
     ),
-  })
+  });
 
-  await expect(repository.saveIfNoOverlap(record())).resolves.toBeNull()
-})
+  await expect(repository.saveIfNoOverlap(record())).resolves.toBeNull();
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -58,15 +60,21 @@ Expected: FAIL because the `23P01` query error rejects rather than resolving to 
 
 ```ts
 function isPostgresExclusionViolation(error: unknown): boolean {
-  return typeof error === 'object' && error !== null &&
-    'code' in error && (error as { code?: unknown }).code === '23P01'
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23P01"
+  );
 }
 
 try {
-  return await this.dataSource.transaction(async (manager) => { /* existing lookup and save */ })
+  return await this.dataSource.transaction(async (manager) => {
+    /* existing lookup and save */
+  });
 } catch (error) {
-  if (isPostgresExclusionViolation(error)) return null
-  throw error
+  if (isPostgresExclusionViolation(error)) return null;
+  throw error;
 }
 ```
 
@@ -86,49 +94,48 @@ git commit -m "fix(api): map database overlap conflicts to 409"
 ### Task 2: Add the database-level no-overlap invariant
 
 **Files:**
+
 - Create: `apps/api/src/database/migrations/0002-add-overtime-overlap-constraint.ts`
 - Modify: `apps/api/src/database/typeorm.config.ts`
+- Modify: `apps/api/test/database-schema.e2e-spec.ts`
 - Modify: `apps/api/test/overtime.e2e-spec.ts`
 
 **Interfaces:**
+
 - Consumes: the existing `overtime_records(user_id, start_at, end_at)` table.
 - Produces: migration `AddOvertimeOverlapConstraint1753500000000` registered in `createTypeOrmOptions`.
 
-- [ ] **Step 1: Write the failing PostgreSQL E2E test**
+- [ ] **Step 1: Write the deterministic failing database-invariant test**
 
 ```ts
-it('allows only one of two simultaneous overlapping creates', async () => {
-  const cookie = await login()
-  const requests = await Promise.all([createRecord(cookie), createRecord(cookie)])
-  const statuses = requests.map((response) => response.status).sort()
+it("rejects overlapping ranges for one user at the database boundary", async () => {
+  await dataSource.query(`INSERT INTO users (...) VALUES (...)`);
+  await dataSource.query(
+    `INSERT INTO overtime_records (...) VALUES (..., '2026-07-13T09:00:00Z', '2026-07-13T11:00:00Z', ...)`,
+  );
 
-  expect(statuses).toEqual([201, 409])
-  expect(requests.find((response) => response.status === 409)?.body).toMatchObject({
-    code: 'OVERTIME_OVERLAP',
-  })
-  const listed = await request(app.getHttpServer())
-    .get('/api/overtime?month=2026-07')
-    .set('Cookie', cookie)
-    .expect(200)
-  expect(listed.body).toMatchObject({ totalMinutes: 210 })
-  expect(listed.body.records).toHaveLength(1)
-})
+  await expect(
+    dataSource.query(
+      `INSERT INTO overtime_records (...) VALUES (..., '2026-07-13T10:00:00Z', '2026-07-13T12:00:00Z', ...)`,
+    ),
+  ).rejects.toMatchObject({ code: "23P01" });
+});
 ```
 
-- [ ] **Step 2: Run the E2E test to verify the old schema permits the race**
+- [ ] **Step 2: Run the E2E test to verify it fails before the migration**
 
-Run: `npm run test:e2e:postgres -- --runInBand apps/api/test/overtime.e2e-spec.ts`
+Run: `npm run test:e2e:postgres`
 
-Expected: The test is timing dependent before the migration. Use Task 1's deterministic error-mapping test as the red-green proof. With Docker unavailable, record the daemon failure and do not claim E2E success.
+Expected: FAIL because the old schema allows the second direct insert. With Docker unavailable, record the daemon failure and do not claim E2E success.
 
 - [ ] **Step 3: Add and register the migration**
 
 ```ts
 export class AddOvertimeOverlapConstraint1753500000000 implements MigrationInterface {
-  name = 'AddOvertimeOverlapConstraint1753500000000'
+  name = "AddOvertimeOverlapConstraint1753500000000";
 
   async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query('CREATE EXTENSION IF NOT EXISTS btree_gist')
+    await queryRunner.query("CREATE EXTENSION IF NOT EXISTS btree_gist");
     await queryRunner.query(`
       ALTER TABLE overtime_records
       ADD CONSTRAINT ex_overtime_records_no_overlap
@@ -136,13 +143,13 @@ export class AddOvertimeOverlapConstraint1753500000000 implements MigrationInter
         user_id WITH =,
         tstzrange(start_at, end_at, '[)') WITH &&
       )
-    `)
+    `);
   }
 
   async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      'ALTER TABLE overtime_records DROP CONSTRAINT ex_overtime_records_no_overlap',
-    )
+      "ALTER TABLE overtime_records DROP CONSTRAINT ex_overtime_records_no_overlap",
+    );
   }
 }
 ```
@@ -155,7 +162,7 @@ Run: `npm run test -w apps/api -- --runInBand src/overtime/typeorm-overtime.repo
 
 Run: `npm run test:e2e:postgres`
 
-Expected: focused tests pass; the E2E command applies both migrations and confirms exactly one parallel write persists. If Docker is unavailable, preserve its failure output as an environment limitation.
+Expected: focused tests pass; the E2E command applies both migrations and confirms the direct second insert fails with `23P01`. Add a parallel HTTP test that expects one `201`, one `409 OVERTIME_OVERLAP`, and exactly one listed record as a regression around the public API. If Docker is unavailable, preserve its failure output as an environment limitation.
 
 - [ ] **Step 5: Commit the constraint and regression test**
 
@@ -167,11 +174,13 @@ git commit -m "fix(db): prevent concurrent overtime overlap"
 ### Task 3: Repair Excel terminology and the stale administrator E2E contract
 
 **Files:**
+
 - Modify: `apps/api/test/admin-reports.e2e-spec.ts`
 - Modify: `README.md`
 - Modify: `docs/runbooks/oracle-deployment.md`
 
 **Interfaces:**
+
 - Consumes: `GET /api/admin/reports.xlsx?month=YYYY-MM&userId=<UUID>`.
 - Produces: docs and E2E checks that consistently call the Excel endpoint and expect the XLSX MIME type.
 
@@ -180,12 +189,18 @@ git commit -m "fix(db): prevent concurrent overtime overlap"
 ```ts
 const excel = await request(app.getHttpServer())
   .get(`/api/admin/reports.xlsx?month=2026-07&userId=${employee.userId}`)
-  .set('Cookie', admin.cookie)
-  .expect('Content-Type', /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/)
-  .expect('Content-Disposition', /attachment; filename="aims-overtime-2026-07\.xlsx"/)
-  .expect(200)
-expect(excel.body).toBeInstanceOf(Buffer)
-expect(excel.body.length).toBeGreaterThan(0)
+  .set("Cookie", admin.cookie)
+  .expect(
+    "Content-Type",
+    /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/,
+  )
+  .expect(
+    "Content-Disposition",
+    /attachment; filename="aims-overtime-2026-07\.xlsx"/,
+  )
+  .expect(200);
+expect(excel.body).toBeInstanceOf(Buffer);
+expect(excel.body.length).toBeGreaterThan(0);
 ```
 
 - [ ] **Step 2: Run the focused E2E test when Docker is available**
@@ -214,9 +229,11 @@ git commit -m "docs: align reports with Excel export"
 ### Task 4: Write the Notion-ready learning project report
 
 **Files:**
+
 - Create: `docs/reports/ai-friendly-overtime-project.md`
 
 **Interfaces:**
+
 - Consumes: the implemented API, database, deployment configuration, tests, and this design.
 - Produces: a self-contained Korean Markdown report suitable for direct paste into Notion.
 
@@ -228,11 +245,17 @@ Use these sections in this order:
 # AI를 활용해 작은 사내 서비스를 구현할 때의 스택 선택과 검증
 
 ## 한 줄 요약
+
 ## 만든 서비스와 범위
+
 ## 왜 이 스택을 골랐는가
+
 ## AI를 빠르게 쓰기 위한 개발 방식
+
 ## 실제로 발견한 문제: 동시 야근 기록 중복
+
 ## 검증과 운영에서 신경 쓴 점
+
 ## 다음 프로젝트에 적용할 체크리스트
 ```
 
@@ -260,9 +283,11 @@ git commit -m "docs: add AI-friendly overtime project report"
 ### Task 5: Run proportionate final verification
 
 **Files:**
+
 - Verify only; no intended file changes.
 
 **Interfaces:**
+
 - Consumes: all previous tasks.
 - Produces: evidence-backed status of unit tests, build, source consistency, and PostgreSQL E2E availability.
 

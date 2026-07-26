@@ -156,7 +156,11 @@ describe('migrateSqliteToPostgres', () => {
       'TRUNCATE TABLE sessions, overtime_records, users CASCADE',
     );
     await target.query(
-      `DELETE FROM migrations WHERE name <> 'InitialSchema1752360000000'`,
+      `DELETE FROM migrations
+       WHERE name NOT IN (
+         'InitialSchema1752360000000',
+         'AddOvertimeOverlapConstraint1753500000000'
+       )`,
     );
   });
 
@@ -204,7 +208,10 @@ describe('migrateSqliteToPostgres', () => {
     expect(report.target).toEqual(report.source);
     expect(report.sessions).toBe(0);
     expect(report.orphans).toBe(0);
-    expect(report.migrations).toEqual(['InitialSchema1752360000000']);
+    expect(report.migrations).toEqual([
+      'InitialSchema1752360000000',
+      'AddOvertimeOverlapConstraint1753500000000',
+    ]);
   });
 
   it('rejects committed targets containing pre-cutover sessions', async () => {

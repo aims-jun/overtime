@@ -8,7 +8,10 @@ import {
 } from './verify';
 import type { MigrationSnapshot } from './verify';
 
-const EXPECTED_MIGRATIONS = ['InitialSchema1752360000000'] as const;
+const EXPECTED_MIGRATIONS = [
+  'InitialSchema1752360000000',
+  'AddOvertimeOverlapConstraint1753500000000',
+] as const;
 
 export type PostMigrationVerificationReport = {
   source: MigrationSnapshot;

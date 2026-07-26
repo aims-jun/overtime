@@ -22,7 +22,10 @@ const REPORT: PostMigrationVerificationReport = {
   },
   sessions: 0,
   orphans: 0,
-  migrations: ['InitialSchema1752360000000'],
+  migrations: [
+    'InitialSchema1752360000000',
+    'AddOvertimeOverlapConstraint1753500000000',
+  ],
 };
 
 describe('post-migration verification CLI safety', () => {
@@ -34,7 +37,10 @@ describe('post-migration verification CLI safety', () => {
         hashes: REPORT.source.hashes,
         sessions: 0,
         orphans: 0,
-        migrations: ['InitialSchema1752360000000'],
+        migrations: [
+          'InitialSchema1752360000000',
+          'AddOvertimeOverlapConstraint1753500000000',
+        ],
         verification: 'passed',
       }),
     );

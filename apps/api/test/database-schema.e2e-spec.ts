@@ -151,4 +151,58 @@ describe('database schema', () => {
       'end_at > start_at',
     );
   });
+
+  it('rejects overlapping ranges for one user at the database boundary', async () => {
+    const userId = 'e5c25779-d43e-4939-90ef-df01158dd322';
+    await dataSource.query(
+      `
+        INSERT INTO users (id, google_subject, email, name, last_login_at)
+        VALUES ($1, $2, $3, $4, $5)
+      `,
+      [
+        userId,
+        'overlap-test-user',
+        'overlap@example.com',
+        '중복 테스트',
+        '2026-07-13T00:00:00.000Z',
+      ],
+    );
+    await dataSource.query(
+      `
+        INSERT INTO overtime_records (
+          id, user_id, work_date, start_at, end_at, duration_minutes, reason
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        'b2662cf4-2e84-4cf3-89d8-66f734c5a871',
+        userId,
+        '2026-07-13',
+        '2026-07-13T09:00:00.000Z',
+        '2026-07-13T11:00:00.000Z',
+        120,
+        '첫 번째 기록',
+      ],
+    );
+
+    await expect(
+      dataSource.query(
+        `
+          INSERT INTO overtime_records (
+            id, user_id, work_date, start_at, end_at, duration_minutes, reason
+          )
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `,
+        [
+          '2fb9c234-8b72-43e5-b620-5dfe5569c769',
+          userId,
+          '2026-07-13',
+          '2026-07-13T10:00:00.000Z',
+          '2026-07-13T12:00:00.000Z',
+          120,
+          '두 번째 기록',
+        ],
+      ),
+    ).rejects.toMatchObject({ code: '23P01' });
+  });
 });

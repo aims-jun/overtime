@@ -17,36 +17,61 @@ function record(): OvertimeRecordEntity {
   };
 }
 
-function createRepository(save: jest.Mock): TypeOrmOvertimeRepository {
-  const builder = {
-    where: jest.fn(),
-    andWhere: jest.fn(),
-    getOne: jest.fn().mockResolvedValue(null),
-  };
-  builder.where.mockReturnValue(builder);
-  builder.andWhere.mockReturnValue(builder);
+type FakeQueryBuilder = {
+  where(query: string, parameters: Record<string, unknown>): FakeQueryBuilder;
+  andWhere(
+    query: string,
+    parameters: Record<string, unknown>,
+  ): FakeQueryBuilder;
+  getOne(): Promise<OvertimeRecordEntity | null>;
+};
 
-  const dataSource = {
-    transaction: jest.fn((work) =>
+type FakeRepository = {
+  createQueryBuilder(alias: string): FakeQueryBuilder;
+  save(value: OvertimeRecordEntity): Promise<OvertimeRecordEntity>;
+};
+
+type FakeManager = {
+  getRepository(target: typeof OvertimeRecordEntity): FakeRepository;
+};
+
+type FakeDataSource = {
+  transaction<T>(work: (manager: FakeManager) => Promise<T>): Promise<T>;
+};
+
+function createRepository(
+  save: (value: OvertimeRecordEntity) => Promise<OvertimeRecordEntity>,
+): TypeOrmOvertimeRepository {
+  const builder: FakeQueryBuilder = {
+    where: () => builder,
+    andWhere: () => builder,
+    getOne: () => Promise.resolve(null),
+  };
+
+  const dataSource: FakeDataSource = {
+    transaction: async (work) =>
       work({
         getRepository: () => ({
           createQueryBuilder: () => builder,
           save,
         }),
       }),
-    ),
-  } as unknown as DataSource;
+  };
 
   return new TypeOrmOvertimeRepository(
     {} as Repository<OvertimeRecordEntity>,
-    dataSource,
+    dataSource as unknown as DataSource,
   );
 }
 
 describe('TypeOrmOvertimeRepository', () => {
   it('returns null when PostgreSQL rejects an overlapping time range', async () => {
-    const repository = createRepository(
-      jest.fn().mockRejectedValue({ code: '23P01' }),
+    const exclusionViolation = Object.assign(
+      new Error('exclusion constraint violation'),
+      { code: '23P01' },
+    );
+    const repository = createRepository(() =>
+      Promise.reject(exclusionViolation),
     );
 
     await expect(repository.saveIfNoOverlap(record())).resolves.toBeNull();
@@ -54,7 +79,9 @@ describe('TypeOrmOvertimeRepository', () => {
 
   it('rethrows database failures other than an overlap violation', async () => {
     const databaseError = new Error('database unavailable');
-    const repository = createRepository(jest.fn().mockRejectedValue(databaseError));
+    const repository = createRepository(async () =>
+      Promise.reject(databaseError),
+    );
 
     await expect(repository.saveIfNoOverlap(record())).rejects.toBe(
       databaseError,

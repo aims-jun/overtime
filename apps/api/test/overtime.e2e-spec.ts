@@ -112,6 +112,32 @@ describe('employee overtime API', () => {
     });
   });
 
+  it('allows only one of simultaneous overlapping creates', async () => {
+    const cookie = await login();
+
+    const responses = await Promise.all([
+      createRecord(cookie),
+      createRecord(cookie),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      201, 409,
+    ]);
+    expect(
+      responses.find((response) => response.status === 409)?.body,
+    ).toMatchObject({
+      code: 'OVERTIME_OVERLAP',
+    });
+
+    const listed = await request(app.getHttpServer())
+      .get('/api/overtime?month=2026-07')
+      .set('Cookie', cookie)
+      .expect(200);
+    expect(listed.body as unknown).toMatchObject({
+      totalMinutes: 210,
+      records: [expect.objectContaining({ durationMinutes: 210 })],
+    });
+  });
+
   it('hides another employee record from update and delete', async () => {
     const ownerCookie = await login();
     const created = await createRecord(ownerCookie).expect(201);
