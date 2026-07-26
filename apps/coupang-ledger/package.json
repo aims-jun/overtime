@@ -1,0 +1,20 @@
+{
+  "name": "coupang-ledger",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "api": "node server/coupang-proxy.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {}
+}
