@@ -1,0 +1,24 @@
+graph LR
+  subgraph client["사용자 영역"]
+    B["모바일 / PC 브라우저"]
+  end
+
+  subgraph vm["Oracle Cloud VM"]
+    subgraph net["Docker 내부 네트워크"]
+      C["Caddy (web 컨테이너)<br/>:80 / :443 외부 개방"]
+      A["NestJS API 컨테이너<br/>:3000 내부 전용"]
+      P["PostgreSQL 17 컨테이너<br/>:5432 내부 전용"]
+    end
+  end
+
+  subgraph ext["외부 서비스"]
+    G["Google 로그인"]
+    L["Let's Encrypt"]
+  end
+
+  B -->|"HTTPS — 방화벽은 80/443만 개방"| C
+  C -->|"React 정적 파일 서빙"| B
+  C -->|"/api/* 프록시"| A
+  A -->|"SQL"| P
+  A -.->|"ID 토큰 검증"| G
+  C -.->|"인증서 자동 발급·갱신"| L

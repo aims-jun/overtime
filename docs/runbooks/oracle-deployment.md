@@ -273,4 +273,4 @@ test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" 
 - backup 6시간 timer, 최근 marker set, 30일 lifecycle, local 48시간 retention
 - 주간 temporary restore journal과 정리 성공
 - `/data/postgres` 용량·소유권, memory, container restart, host 5432 비노출
-- API health, 로그인, 관리자 집계/CSV
+- API health, 로그인, 관리자 집계/Excel 다운로드
