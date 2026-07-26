@@ -129,7 +129,7 @@ docker compose --env-file .env.production -f compose.production.yaml run --rm --
   api npm run db:verify:sqlite
 ```
 
-출력의 `source`·`target` users/records count가 일치하고, `hashes`에 ID set·business fields·duration aggregate hash가 모두 표시되어야 한다. `"sessions":0`, `"orphans":0`, `"migrations":["InitialSchema1752360000000"]`, `"verification":"passed"`를 모두 확인한다. 하나라도 틀리거나 명령이 nonzero로 종료하면 서비스를 재개하지 않는다.
+출력의 `source`·`target` users/records count가 일치하고, `hashes`에 ID set·business fields·duration aggregate hash가 모두 표시되어야 한다. `"sessions":0`, `"orphans":0`, `"migrations":["InitialSchema1752360000000","AddOvertimeOverlapConstraint1753500000000"]`, `"verification":"passed"`를 모두 확인한다. 하나라도 틀리거나 명령이 nonzero로 종료하면 서비스를 재개하지 않는다.
 
 rollback 경계는 서비스 재개다. 재개 전이고 PostgreSQL user write가 0일 때만 보존한 SQLite image/env로 복귀할 수 있다. 재개 후는 PostgreSQL이 source of truth이며 SQLite로 돌아가지 않는다. SQLite snapshot은 30일 동안 read-only로 보존한 뒤 별도 승인과 checksum 대조 후 폐기한다.
 
@@ -273,4 +273,4 @@ test "$(sudo systemctl show overtime-backup.service -p ExecMainStatus --value)" 
 - backup 6시간 timer, 최근 marker set, 30일 lifecycle, local 48시간 retention
 - 주간 temporary restore journal과 정리 성공
 - `/data/postgres` 용량·소유권, memory, container restart, host 5432 비노출
-- API health, 로그인, 관리자 집계/CSV
+- API health, 로그인, 관리자 집계/Excel(.xlsx)

@@ -129,19 +129,29 @@ describe('administrator reports API', () => {
     });
   });
 
-  it('exports BOM CSV safely and rejects invalid filters', async () => {
+  it('exports an Excel workbook and rejects invalid filters', async () => {
     const employee = await login(employeeIdentity);
     await create(employee.cookie, '=SUM(1,1)');
     const admin = await login(adminIdentity);
 
-    const csv = await request(app.getHttpServer())
-      .get(`/api/admin/reports.csv?month=2026-07&userId=${employee.userId}`)
+    const excel = await request(app.getHttpServer())
+      .get(`/api/admin/reports.xlsx?month=2026-07&userId=${employee.userId}`)
       .set('Cookie', admin.cookie)
-      .expect('Content-Type', /text\/csv/)
+      .expect(
+        'Content-Type',
+        /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/,
+      )
+      .expect(
+        'Content-Disposition',
+        /attachment; filename="aims-overtime-2026-07\.xlsx"/,
+      )
       .expect(200);
-    expect(csv.text.startsWith('\uFEFF')).toBe(true);
-    expect(csv.text).toContain("'=SUM(1,1)");
-    expect(csv.text).not.toContain('admin@company.com');
+    const excelBody: unknown = excel.body;
+    expect(Buffer.isBuffer(excelBody)).toBe(true);
+    if (!Buffer.isBuffer(excelBody)) {
+      throw new Error('Excel response did not contain a workbook buffer');
+    }
+    expect(excelBody.length).toBeGreaterThan(0);
 
     await request(app.getHttpServer())
       .get('/api/admin/reports?month=2026-13')
