@@ -143,7 +143,7 @@ describe('administrator reports API', () => {
       )
       .expect(
         'Content-Disposition',
-        /attachment; filename="aims-overtime-2026-07\.xlsx"/,
+        /attachment; filename="overtime-2607\.xlsx"; filename\*=UTF-8''/,
       )
       .expect(200);
     const excelBody: unknown = excel.body;
