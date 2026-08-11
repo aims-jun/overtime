@@ -1,10 +1,24 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Workbook } from 'exceljs';
 import request from 'supertest';
 import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
 import type { VerifiedGoogleIdentity } from '../src/auth/google-verifier';
 import { GoogleVerifier } from '../src/auth/google-verifier';
+
+// superagent only auto-buffers application/octet-stream, application/pdf,
+// and image/* responses (see superagent/lib/node/parsers/index.js). The
+// xlsx MIME type has no built-in parser, so without this the response body
+// would be `{}` instead of a Buffer. This forces the raw bytes to buffer.
+const binaryParser = (
+  res: NodeJS.ReadableStream,
+  callback: (error: Error | null, body: Buffer) => void,
+): void => {
+  const chunks: Buffer[] = [];
+  res.on('data', (chunk: Buffer) => chunks.push(chunk));
+  res.on('end', () => callback(null, Buffer.concat(chunks)));
+};
 
 class FakeGoogleVerifier implements GoogleVerifier {
   identity: VerifiedGoogleIdentity = {
@@ -137,6 +151,8 @@ describe('administrator reports API', () => {
     const excel = await request(app.getHttpServer())
       .get(`/api/admin/reports.xlsx?month=2026-07&userId=${employee.userId}`)
       .set('Cookie', admin.cookie)
+      .buffer(true)
+      .parse(binaryParser)
       .expect(
         'Content-Type',
         /application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/,
@@ -152,6 +168,17 @@ describe('administrator reports API', () => {
       throw new Error('Excel response did not contain a workbook buffer');
     }
     expect(excelBody.length).toBeGreaterThan(0);
+
+    const workbook = new Workbook();
+    await workbook.xlsx.load(excelBody);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      '집계',
+      '연장근무 이력',
+      '기준',
+    ]);
+    const history = workbook.getWorksheet('연장근무 이력');
+    expect(history?.getRow(4).getCell(5).value).toBe('김직원');
+    expect(history?.getRow(4).getCell(15).value).toBe("'=SUM(1,1)");
 
     await request(app.getHttpServer())
       .get('/api/admin/reports?month=2026-13')
