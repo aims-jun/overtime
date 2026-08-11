@@ -140,3 +140,46 @@ describe('연장근무 이력 시트', () => {
     expect(sheet?.autoFilter).toBe('A3:T3');
   });
 });
+
+describe('집계 시트', () => {
+  it('renders the pivot-shaped static table', async () => {
+    const sheet = (await load(input())).getWorksheet('집계');
+    // 2026-08: 1주차=8/1~2, 이후 월~일 → 6주차까지
+    expect(sheet?.getCell('A3').value).toBe('Sum of 연장근무');
+    expect(sheet?.getCell('B3').value).toBe('열 레이블');
+    expect(sheet?.getCell('B4').value).toBe('26년 8월');
+    expect(sheet?.getCell('H4').value).toBe('26년 8월 요약');
+    expect(sheet?.getCell('I4').value).toBe('총합계');
+    expect(sheet?.getCell('A5').value).toBe('행 레이블');
+    expect(sheet?.getCell('B5').value).toBe('1주차');
+    expect(sheet?.getCell('G5').value).toBe('6주차');
+    // 가나다순: 김직원, 박야근
+    expect(sheet?.getCell('A6').value).toBe('김직원');
+    expect(sheet?.getCell('A6').alignment?.horizontal).toBe('left');
+    expect(sheet?.getCell('D6').value).toBe(1.5); // 8/11 → 3주차
+    expect(sheet?.getCell('B6').value ?? null).toBeNull(); // 기록 없는 주는 빈 칸
+    expect(sheet?.getCell('H6').value).toBe(1.5);
+    expect(sheet?.getCell('I6').value).toBe(1.5);
+    expect(sheet?.getCell('A7').value).toBe('박야근');
+    expect(sheet?.getCell('C7').value).toBe(3); // 8/8 → 2주차
+    expect(sheet?.getCell('A8').value).toBe('총합계');
+    expect(sheet?.getCell('H8').value).toBe(4.5);
+    expect(sheet?.getCell('I8').value).toBe(4.5);
+  });
+
+  it('renders only label rows for an empty month', async () => {
+    const sheet = (await load(input({ rows: [] }))).getWorksheet('집계');
+    expect(sheet?.getCell('A5').value).toBe('행 레이블');
+    expect(sheet?.getCell('A6').value ?? null).toBeNull();
+  });
+});
+
+describe('기준 시트', () => {
+  it('writes the four rule lines', async () => {
+    const sheet = (await load(input())).getWorksheet('기준');
+    expect(sheet?.getCell('B2').value).toBe(
+      '※ 주 52시간제: 근로기준법상 1주 최대 연장 근로 시간은 12시간으로 제한됩니다. ',
+    );
+    expect(sheet?.getCell('B5').value).toBe('※ 근무유형 - 연장근로, 휴일근로');
+  });
+});

@@ -3,6 +3,7 @@ import {
   excelDate,
   excelTime,
   monthLabel,
+  weekCountOfMonth,
   weekOfMonth,
   workTypeFor,
 } from './excel-mapping';
@@ -74,7 +75,7 @@ export async function buildReportExcel(
   input: ReportExcelInput,
 ): Promise<Buffer> {
   const workbook = new Workbook();
-  workbook.addWorksheet('집계');
+  buildSummarySheet(workbook.addWorksheet('집계'), input);
   buildHistorySheet(
     workbook.addWorksheet('연장근무 이력', {
       views: [
@@ -89,7 +90,7 @@ export async function buildReportExcel(
     }),
     input,
   );
-  workbook.addWorksheet('기준');
+  buildCriteriaSheet(workbook.addWorksheet('기준'));
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
 
@@ -190,4 +191,107 @@ function writeHistoryRow(
       };
     }
   }
+}
+
+const CRITERIA_LINES = [
+  '※ 주 52시간제: 근로기준법상 1주 최대 연장 근로 시간은 12시간으로 제한됩니다. ',
+  '※ 평일 연장근로시 저녁 식사시간은 산정에서 제외하여야 함. 운영팀/ QA팀은 대부분 도시락을 먹으며 일하거나 식사를 안하고 근무하기 때문에 18시부터 기산으로 적용 → 직원에게 유리하게!',
+  '   단, 휴일 근로시 점심시간은 확실히 제외',
+  '※ 근무유형 - 연장근로, 휴일근로',
+];
+
+function buildSummarySheet(sheet: Worksheet, input: ReportExcelInput): void {
+  const weekCount = weekCountOfMonth(input.month);
+  const weekLabels = Array.from(
+    { length: weekCount },
+    (_, index) => `${index + 1}주차`,
+  );
+  const summaryColumn = 2 + weekCount;
+  const grandColumn = summaryColumn + 1;
+  sheet.getColumn(1).width = 15.43;
+  for (let column = 2; column < summaryColumn; column += 1) {
+    sheet.getColumn(column).width = 6.14;
+  }
+  sheet.getColumn(summaryColumn).width = 12.57;
+  sheet.getColumn(grandColumn).width = 6.86;
+
+  const label = monthLabel(input.month);
+  writeSummaryCell(sheet, 3, 1, 'Sum of 연장근무');
+  writeSummaryCell(sheet, 3, 2, '열 레이블');
+  writeSummaryCell(sheet, 4, 2, label);
+  writeSummaryCell(sheet, 4, summaryColumn, `${label} 요약`);
+  writeSummaryCell(sheet, 4, grandColumn, '총합계');
+  writeSummaryCell(sheet, 5, 1, '행 레이블');
+  weekLabels.forEach((week, index) => {
+    writeSummaryCell(sheet, 5, 2 + index, week);
+  });
+
+  if (input.rows.length === 0) {
+    return;
+  }
+
+  const hoursByNameAndWeek = new Map<string, Map<string, number>>();
+  for (const row of input.rows) {
+    const week = weekOfMonth(row.workDate);
+    const perWeek =
+      hoursByNameAndWeek.get(row.name) ?? new Map<string, number>();
+    perWeek.set(week, (perWeek.get(week) ?? 0) + row.durationMinutes / 60);
+    hoursByNameAndWeek.set(row.name, perWeek);
+  }
+  const names = [...hoursByNameAndWeek.keys()].sort((a, b) =>
+    a.localeCompare(b, 'ko'),
+  );
+  const weekTotals = new Map<string, number>();
+  let rowNumber = 6;
+  for (const name of names) {
+    const perWeek = hoursByNameAndWeek.get(name) ?? new Map<string, number>();
+    writeSummaryCell(sheet, rowNumber, 1, safeExcelText(name), 'left');
+    let personTotal = 0;
+    weekLabels.forEach((week, index) => {
+      const hours = perWeek.get(week);
+      if (hours !== undefined) {
+        writeSummaryCell(sheet, rowNumber, 2 + index, hours);
+        personTotal += hours;
+        weekTotals.set(week, (weekTotals.get(week) ?? 0) + hours);
+      }
+    });
+    writeSummaryCell(sheet, rowNumber, summaryColumn, personTotal);
+    writeSummaryCell(sheet, rowNumber, grandColumn, personTotal);
+    rowNumber += 1;
+  }
+  writeSummaryCell(sheet, rowNumber, 1, '총합계', 'left');
+  let grandTotal = 0;
+  weekLabels.forEach((week, index) => {
+    const hours = weekTotals.get(week);
+    if (hours !== undefined) {
+      writeSummaryCell(sheet, rowNumber, 2 + index, hours);
+      grandTotal += hours;
+    }
+  });
+  writeSummaryCell(sheet, rowNumber, summaryColumn, grandTotal);
+  writeSummaryCell(sheet, rowNumber, grandColumn, grandTotal);
+}
+
+function writeSummaryCell(
+  sheet: Worksheet,
+  row: number,
+  column: number,
+  value: string | number,
+  horizontal?: 'left',
+): void {
+  const cell = sheet.getRow(row).getCell(column);
+  cell.value = value;
+  cell.font = { name: FONT, size: 12 };
+  if (horizontal) {
+    cell.alignment = { horizontal };
+  }
+}
+
+function buildCriteriaSheet(sheet: Worksheet): void {
+  sheet.getColumn(2).width = 100;
+  CRITERIA_LINES.forEach((text, index) => {
+    const cell = sheet.getCell(`B${2 + index}`);
+    cell.value = text;
+    cell.font = { name: FONT, size: 11 };
+  });
 }
