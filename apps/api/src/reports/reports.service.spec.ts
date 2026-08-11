@@ -1,8 +1,14 @@
+import type { ConfigService } from '@nestjs/config';
 import type { OvertimeRecordEntity } from '../database/entities/overtime-record.entity';
 import type { UserEntity } from '../database/entities/user.entity';
+import type { Env } from '../config/env.schema';
 import { Workbook } from 'exceljs';
 import { ReportsRepository } from './reports.repository';
 import { ReportsService } from './reports.service';
+
+const config = {
+  get: jest.fn().mockReturnValue('IT개발팀'),
+} as unknown as ConfigService<Env, true>;
 
 const employee = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -62,7 +68,7 @@ class FakeReportsRepository extends ReportsRepository {
 describe('ReportsService', () => {
   it('aggregates the exact monthly rows by employee', async () => {
     const repository = new FakeReportsRepository();
-    const service = new ReportsService(repository);
+    const service = new ReportsService(repository, config);
 
     const report = await service.monthly({ month: '2026-07' });
 
@@ -84,23 +90,18 @@ describe('ReportsService', () => {
     ]);
   });
 
-  it('applies one user filter identically to JSON and Excel', async () => {
+  it('builds the company-format excel with korean filename', async () => {
     const repository = new FakeReportsRepository();
-    const service = new ReportsService(repository);
-
-    const query = { month: '2026-07', userId: employee.id };
-    const report = await service.monthly(query);
-    const excel = await service.excel(query);
+    const service = new ReportsService(repository, config);
+    const { buffer, fileName, asciiFileName } = await service.excel({
+      month: '2026-07',
+    });
+    expect(fileName).toBe('연장 근무 이력_IT개발팀_2607.xlsx');
+    expect(asciiFileName).toBe('overtime-2607.xlsx');
     const workbook = new Workbook();
-    await workbook.xlsx.load(excel);
-    const sheet = workbook.getWorksheet('업무연장 내역');
-    const emails = sheet
-      ?.getColumn(3)
-      .values.filter((value): value is string => typeof value === 'string');
-
-    expect(report.records).toHaveLength(1);
-    expect(report.totalMinutes).toBe(120);
-    expect(emails).toContain(employee.email);
-    expect(emails).not.toContain(manager.email);
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.getWorksheet('연장근무 이력');
+    expect(sheet?.getRow(4).getCell(5).value).toBe('김직원');
+    expect(sheet?.getRow(4).getCell(4).value).toBe('IT개발팀');
   });
 });

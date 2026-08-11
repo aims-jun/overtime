@@ -59,7 +59,8 @@ describe('parseEnv', () => {
 
   it('uses the provided REPORT_DEPARTMENT', () => {
     expect(
-      parseEnv({ ...validEnv, REPORT_DEPARTMENT: '플랫폼팀' }).REPORT_DEPARTMENT,
+      parseEnv({ ...validEnv, REPORT_DEPARTMENT: '플랫폼팀' })
+        .REPORT_DEPARTMENT,
     ).toBe('플랫폼팀');
   });
 });

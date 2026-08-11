@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DateTime } from 'luxon';
+import type { Env } from '../config/env.schema';
 import { InvalidOvertimeInputError } from '../overtime/domain/overtime.errors';
 import { buildReportExcel } from './excel';
+import type { ReportExcelRow } from './excel';
 import { ReportsRepository } from './reports.repository';
 
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -27,10 +30,18 @@ export type MonthlyAdminReport = {
   totalsByUser: Array<{ user: AdminUserView; totalMinutes: number }>;
   records: AdminOvertimeRow[];
 };
+export type ReportExcelResult = {
+  buffer: Buffer;
+  fileName: string;
+  asciiFileName: string;
+};
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly repository: ReportsRepository) {}
+  constructor(
+    private readonly repository: ReportsRepository,
+    private readonly config: ConfigService<Env, true>,
+  ) {}
 
   async listUsers(): Promise<AdminUserView[]> {
     return (await this.repository.listUsers()).map((user) =>
@@ -63,19 +74,45 @@ export class ReportsService {
     };
   }
 
-  async excel(query: MonthlyReportQuery): Promise<Buffer> {
-    const records = await this.rows(query);
-    return buildReportExcel(
-      records.map((record) => ({
-        workDate: record.workDate,
-        name: record.user.name,
-        email: record.user.email,
-        startTime: record.startTime,
-        endTime: record.endTime,
-        durationMinutes: record.durationMinutes,
-        reason: record.reason,
-      })),
-    );
+  async excel(query: MonthlyReportQuery): Promise<ReportExcelResult> {
+    const range = this.range(query);
+    const records = await this.repository.listRecords(range);
+    const department = this.config.get('REPORT_DEPARTMENT', { infer: true });
+    const buffer = await buildReportExcel({
+      month: query.month,
+      department,
+      rows: records.map((record) => this.excelRow(record)),
+    });
+    const yymm = `${query.month.slice(2, 4)}${query.month.slice(5, 7)}`;
+    return {
+      buffer,
+      fileName: `연장 근무 이력_${department}_${yymm}.xlsx`,
+      asciiFileName: `overtime-${yymm}.xlsx`,
+    };
+  }
+
+  private excelRow(record: {
+    workDate: string;
+    startAt: Date;
+    endAt: Date;
+    durationMinutes: number;
+    reason: string;
+    user: { name: string };
+  }): ReportExcelRow {
+    const end = DateTime.fromJSDate(record.endAt).setZone(TIME_ZONE);
+    const endTime = end.toFormat('HH:mm');
+    const endsAtMidnight = endTime === '00:00';
+    return {
+      workDate: record.workDate,
+      endDate: endsAtMidnight ? record.workDate : end.toFormat('yyyy-MM-dd'),
+      name: record.user.name,
+      startTime: DateTime.fromJSDate(record.startAt)
+        .setZone(TIME_ZONE)
+        .toFormat('HH:mm'),
+      endTime: endsAtMidnight ? '24:00' : endTime,
+      durationMinutes: record.durationMinutes,
+      reason: record.reason,
+    };
   }
 
   private async rows(query: MonthlyReportQuery): Promise<AdminOvertimeRow[]> {

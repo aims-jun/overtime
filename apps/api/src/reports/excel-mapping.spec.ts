@@ -50,11 +50,7 @@ describe('excel mapping', () => {
     expect(excelDate('2026-08-11').toISOString()).toBe(
       '2026-08-11T00:00:00.000Z',
     );
-    expect(excelTime('17:30').toISOString()).toBe(
-      '1899-12-30T17:30:00.000Z',
-    );
-    expect(excelTime('24:00').toISOString()).toBe(
-      '1899-12-31T00:00:00.000Z',
-    );
+    expect(excelTime('17:30').toISOString()).toBe('1899-12-30T17:30:00.000Z');
+    expect(excelTime('24:00').toISOString()).toBe('1899-12-31T00:00:00.000Z');
   });
 });

@@ -41,15 +41,15 @@ export class ReportsController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<StreamableFile> {
     const query: MonthlyReportQuery = { month, userId };
-    const excel = await this.reports.excel(query);
+    const { buffer, fileName, asciiFileName } = await this.reports.excel(query);
     response.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
     response.setHeader(
       'Content-Disposition',
-      `attachment; filename="aims-overtime-${month}.xlsx"`,
+      `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
     );
-    return new StreamableFile(excel);
+    return new StreamableFile(buffer);
   }
 }
