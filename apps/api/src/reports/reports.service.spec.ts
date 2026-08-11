@@ -104,4 +104,37 @@ describe('ReportsService', () => {
     expect(sheet?.getRow(4).getCell(5).value).toBe('김직원');
     expect(sheet?.getRow(4).getCell(4).value).toBe('IT개발팀');
   });
+
+  it('applies the midnight rules to end date and time', async () => {
+    const repository = new FakeReportsRepository();
+    repository.records = [
+      {
+        ...record('m1', employee, 240),
+        startAt: new Date('2026-07-13T11:00:00.000Z'), // 20:00 KST
+        endAt: new Date('2026-07-13T15:00:00.000Z'), // 정확히 자정 (7/14 00:00 KST)
+      },
+      {
+        ...record('m2', manager, 330),
+        startAt: new Date('2026-07-13T11:00:00.000Z'), // 20:00 KST
+        endAt: new Date('2026-07-13T16:30:00.000Z'), // 익일 01:30 KST
+      },
+    ];
+    const service = new ReportsService(repository, config);
+    const { buffer } = await service.excel({ month: '2026-07' });
+    const workbook = new Workbook();
+    await workbook.xlsx.load(buffer);
+    const sheet = workbook.getWorksheet('연장근무 이력');
+    expect((sheet?.getRow(4).getCell(9).value as Date).toISOString()).toBe(
+      '2026-07-13T00:00:00.000Z',
+    );
+    expect((sheet?.getRow(4).getCell(10).value as Date).toISOString()).toBe(
+      '1899-12-31T00:00:00.000Z',
+    );
+    expect((sheet?.getRow(5).getCell(9).value as Date).toISOString()).toBe(
+      '2026-07-14T00:00:00.000Z',
+    );
+    expect((sheet?.getRow(5).getCell(10).value as Date).toISOString()).toBe(
+      '1899-12-30T01:30:00.000Z',
+    );
+  });
 });
