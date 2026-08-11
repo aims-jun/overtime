@@ -52,4 +52,14 @@ describe('parseEnv', () => {
       }),
     ).toThrow();
   });
+
+  it('defaults REPORT_DEPARTMENT to IT개발팀', () => {
+    expect(parseEnv(validEnv).REPORT_DEPARTMENT).toBe('IT개발팀');
+  });
+
+  it('uses the provided REPORT_DEPARTMENT', () => {
+    expect(
+      parseEnv({ ...validEnv, REPORT_DEPARTMENT: '플랫폼팀' }).REPORT_DEPARTMENT,
+    ).toBe('플랫폼팀');
+  });
 });

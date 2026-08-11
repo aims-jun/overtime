@@ -11,6 +11,7 @@ export type Env = {
   SESSION_COOKIE_NAME: string;
   SESSION_TTL_DAYS: number;
   SESSION_HASH_SECRET: string;
+  REPORT_DEPARTMENT: string;
 };
 
 const envSchema = z
@@ -57,6 +58,7 @@ const envSchema = z
       .regex(/^[A-Za-z0-9_-]+$/),
     SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(30).default(7),
     SESSION_HASH_SECRET: z.string().min(32),
+    REPORT_DEPARTMENT: z.string().trim().min(1).default('IT개발팀'),
   })
   .superRefine((env, context) => {
     if (
