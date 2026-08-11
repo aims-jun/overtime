@@ -99,6 +99,7 @@ describe('OvertimePage', () => {
   })
 
   it('keeps the current records visible while another month is loading', async () => {
+    const currentMonthLabel = `${new Date().getMonth() + 1}월 업무 연장`
     server.use(
       http.get('/api/overtime', ({ request }) => {
         const month = new URL(request.url).searchParams.get('month')
@@ -120,7 +121,7 @@ describe('OvertimePage', () => {
     expect(screen.getByText('배포 대응')).toBeInTheDocument()
     expect(
       within(screen.getByLabelText('선택한 달 업무 연장 합계')).getByText(
-        '7월 업무 연장',
+        currentMonthLabel,
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole('status', { name: '다른 달 내역을 불러오는 중' }))
